@@ -1,0 +1,27 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="142" y1="112" x2="859" y2="927" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8F7F2"/>
+      <stop offset="1" stop-color="#DDE7E0"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="334" y1="292" x2="690" y2="739" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#78978A"/>
+      <stop offset="1" stop-color="#3F6153"/>
+    </linearGradient>
+    <filter id="shadow" x="80" y="90" width="864" height="864" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="34" stdDeviation="35" flood-color="#385044" flood-opacity=".2"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="128" y="112" width="768" height="768" rx="178" fill="url(#bg)"/>
+    <rect x="130" y="114" width="764" height="764" rx="176" stroke="white" stroke-opacity=".85" stroke-width="4"/>
+  </g>
+  <circle cx="512" cy="496" r="245" stroke="#6C897C" stroke-opacity=".16" stroke-width="10"/>
+  <circle cx="512" cy="496" r="199" stroke="#6C897C" stroke-opacity=".12" stroke-width="3"/>
+  <path d="M683 316C518 325 366 397 343 552C326 668 406 738 499 715C626 683 698 538 683 316Z" fill="url(#leaf)"/>
+  <path d="M373 676C428 561 502 470 647 359" stroke="#F8F7F2" stroke-width="28" stroke-linecap="round"/>
+  <path d="M472 529C434 503 402 480 369 468" stroke="#F8F7F2" stroke-width="20" stroke-linecap="round"/>
+  <path d="M535 459C551 418 566 390 586 361" stroke="#F8F7F2" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="732" cy="715" r="62" fill="#F5F3ED" stroke="#668175" stroke-width="10"/>
+  <path d="M706 716L725 735L761 696" stroke="#517062" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
