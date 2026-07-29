@@ -354,13 +354,19 @@ function App() {
       </aside>
 
       <section className="workspace">
-        <header className="titlebar">
-          <div>
-            <span className="eyebrow">{view === "focus" ? "CTDP" : "RSIP"}</span>
-            <h1>{view === "focus" ? "守住一次承诺" : "改变长期稳态"}</h1>
+        <header className="titlebar" data-tauri-drag-region>
+          <div data-tauri-drag-region>
+            <span className="eyebrow" data-tauri-drag-region>
+              {view === "focus" ? "CTDP" : "RSIP"}
+            </span>
+            <h1 data-tauri-drag-region>
+              {view === "focus" ? "守住一次承诺" : "改变长期稳态"}
+            </h1>
           </div>
-          <div className="titlebar-actions">
-            <span className="date-chip">{formatHeaderDate()}</span>
+          <div className="titlebar-actions" data-tauri-drag-region>
+            <span className="date-chip" data-tauri-drag-region>
+              {formatHeaderDate()}
+            </span>
           </div>
         </header>
 
