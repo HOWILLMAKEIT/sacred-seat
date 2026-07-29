@@ -1,6 +1,11 @@
 use serde::Deserialize;
 use serde_json::Value;
-use std::io::Write;
+use std::collections::HashSet;
+use std::env;
+use std::ffi::{OsStr, OsString};
+use std::fs;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 #[derive(Debug, Deserialize)]
@@ -11,13 +16,253 @@ struct OrganizeRequest {
     policies: Value,
 }
 
-fn codex_binary() -> String {
-    for candidate in ["/opt/homebrew/bin/codex", "/usr/local/bin/codex", "codex"] {
-        if candidate == "codex" || std::path::Path::new(candidate).exists() {
-            return candidate.to_string();
+#[derive(Debug)]
+struct CodexLaunch {
+    executable: PathBuf,
+    path_env: OsString,
+}
+
+fn is_executable(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        fs::metadata(path)
+            .map(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    }
+
+    #[cfg(not(unix))]
+    {
+        path.is_file()
+    }
+}
+
+fn push_unique_dir(dirs: &mut Vec<PathBuf>, seen: &mut HashSet<PathBuf>, dir: PathBuf) {
+    if dir.is_dir() && seen.insert(dir.clone()) {
+        dirs.push(dir);
+    }
+}
+
+fn push_versioned_bin_dirs(
+    dirs: &mut Vec<PathBuf>,
+    seen: &mut HashSet<PathBuf>,
+    versions_root: &Path,
+    suffix: &Path,
+) {
+    let Ok(entries) = fs::read_dir(versions_root) else {
+        return;
+    };
+
+    let mut version_dirs = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .collect::<Vec<_>>();
+    version_dirs.sort();
+    version_dirs.reverse();
+
+    for version_dir in version_dirs {
+        push_unique_dir(dirs, seen, version_dir.join(suffix));
+    }
+}
+
+fn candidate_path_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    let mut seen = HashSet::new();
+
+    if let Some(path) = env::var_os("PATH") {
+        for dir in env::split_paths(&path) {
+            push_unique_dir(&mut dirs, &mut seen, dir);
         }
     }
-    "codex".to_string()
+
+    for dir in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"] {
+        push_unique_dir(&mut dirs, &mut seen, PathBuf::from(dir));
+    }
+
+    if let Some(home) = env::var_os("HOME").map(PathBuf::from) {
+        for relative in [
+            ".local/bin",
+            ".npm/bin",
+            ".npm-global/bin",
+            ".volta/bin",
+            ".bun/bin",
+            "Library/pnpm",
+            ".local/share/pnpm",
+            ".asdf/shims",
+            ".mise/shims",
+        ] {
+            push_unique_dir(&mut dirs, &mut seen, home.join(relative));
+        }
+
+        push_versioned_bin_dirs(
+            &mut dirs,
+            &mut seen,
+            &home.join(".nvm/versions/node"),
+            Path::new("bin"),
+        );
+        push_versioned_bin_dirs(
+            &mut dirs,
+            &mut seen,
+            &home.join(".fnm/node-versions"),
+            Path::new("installation/bin"),
+        );
+        push_versioned_bin_dirs(
+            &mut dirs,
+            &mut seen,
+            &home.join(".local/share/fnm/node-versions"),
+            Path::new("installation/bin"),
+        );
+        push_versioned_bin_dirs(
+            &mut dirs,
+            &mut seen,
+            &home.join(".asdf/installs/nodejs"),
+            Path::new("bin"),
+        );
+        push_versioned_bin_dirs(
+            &mut dirs,
+            &mut seen,
+            &home.join(".local/share/mise/installs/node"),
+            Path::new("bin"),
+        );
+    }
+
+    dirs
+}
+
+fn find_executable(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
+    dirs.iter()
+        .map(|dir| dir.join(name))
+        .find(|candidate| is_executable(candidate))
+}
+
+fn codex_from_login_shell() -> Option<PathBuf> {
+    let mut shells = Vec::new();
+    if let Some(shell) = env::var_os("SHELL").map(PathBuf::from) {
+        shells.push(shell);
+    }
+    for shell in [PathBuf::from("/bin/zsh"), PathBuf::from("/bin/bash")] {
+        if !shells.contains(&shell) {
+            shells.push(shell);
+        }
+    }
+
+    for shell in shells {
+        if !is_executable(&shell) {
+            continue;
+        }
+
+        let Ok(output) = Command::new(&shell)
+            .args(["-lic", "command -v codex"])
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+        else {
+            continue;
+        };
+
+        if !output.status.success() {
+            continue;
+        }
+
+        for line in String::from_utf8_lossy(&output.stdout).lines().rev() {
+            let candidate = PathBuf::from(line.trim());
+            if candidate.is_absolute() && is_executable(&candidate) {
+                return Some(candidate);
+            }
+        }
+    }
+
+    None
+}
+
+fn native_codex_distribution() -> Option<(&'static str, &'static str)> {
+    match (env::consts::OS, env::consts::ARCH) {
+        ("macos", "aarch64") => Some(("codex-darwin-arm64", "aarch64-apple-darwin")),
+        ("macos", "x86_64") => Some(("codex-darwin-x64", "x86_64-apple-darwin")),
+        ("linux", "aarch64") => Some(("codex-linux-arm64", "aarch64-unknown-linux-musl")),
+        ("linux", "x86_64") => Some(("codex-linux-x64", "x86_64-unknown-linux-musl")),
+        _ => None,
+    }
+}
+
+fn native_codex_for(wrapper: &Path) -> Option<PathBuf> {
+    let (package, target) = native_codex_distribution()?;
+    let canonical = fs::canonicalize(wrapper).ok()?;
+
+    // npm、pnpm 与 Homebrew 的全局安装可能采用不同的 node_modules
+    // 布局，因此从包装脚本位置逐级向上尝试官方原生包路径。
+    for ancestor in canonical.ancestors().take(8) {
+        let candidate = ancestor
+            .join("node_modules")
+            .join("@openai")
+            .join(package)
+            .join("vendor")
+            .join(target)
+            .join("bin")
+            .join("codex");
+        if is_executable(&candidate) {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+fn requires_node(executable: &Path) -> bool {
+    if executable.extension() == Some(OsStr::new("js")) {
+        return true;
+    }
+
+    let mut prefix = [0_u8; 256];
+    let Ok(mut file) = fs::File::open(executable) else {
+        return false;
+    };
+    let Ok(length) = file.read(&mut prefix) else {
+        return false;
+    };
+    let first_line = &prefix[..length]
+        .split(|byte| *byte == b'\n')
+        .next()
+        .unwrap_or_default();
+
+    std::str::from_utf8(first_line)
+        .is_ok_and(|shebang| shebang.starts_with("#!") && shebang.contains("node"))
+}
+
+fn resolve_codex_launch() -> Result<CodexLaunch, String> {
+    let mut path_dirs = candidate_path_dirs();
+    let mut codex = find_executable("codex", &path_dirs).or_else(codex_from_login_shell);
+
+    if let Some(found) = codex.as_ref().and_then(|path| path.parent()) {
+        if !path_dirs.iter().any(|dir| dir == found) {
+            path_dirs.insert(0, found.to_path_buf());
+        }
+    }
+
+    let Some(wrapper_or_binary) = codex.take() else {
+        return Err(
+            "未找到 Codex CLI。请先在终端安装 Codex，并运行 `codex login` 完成登录。".to_string(),
+        );
+    };
+
+    let executable = native_codex_for(&wrapper_or_binary).unwrap_or(wrapper_or_binary);
+
+    if requires_node(&executable) && find_executable("node", &path_dirs).is_none() {
+        return Err(format!(
+            "已找到 Codex 启动脚本（{}），但未找到它依赖的 Node.js。请确认终端中 `node --version` 可以正常运行。",
+            executable.display()
+        ));
+    }
+
+    let path_env =
+        env::join_paths(&path_dirs).map_err(|error| format!("无法构造 Codex 运行环境：{error}"))?;
+
+    Ok(CodexLaunch {
+        executable,
+        path_env,
+    })
 }
 
 fn extract_json(raw: &str) -> Result<String, String> {
@@ -40,6 +285,69 @@ fn extract_json(raw: &str) -> Result<String, String> {
     }
 
     serde_json::to_string(&value).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[cfg(unix)]
+    fn write_executable(path: &Path, content: &[u8]) {
+        use std::os::unix::fs::PermissionsExt;
+
+        fs::create_dir_all(path.parent().expect("test file must have a parent")).unwrap();
+        fs::write(path, content).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn detects_node_wrapper_by_shebang() {
+        let root = unique_test_dir("node-wrapper");
+        let wrapper = root.join("codex");
+        write_executable(&wrapper, b"#!/usr/bin/env node\nconsole.log('codex');\n");
+
+        assert!(requires_node(&wrapper));
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn resolves_native_binary_from_official_package_layout() {
+        let Some((package, target)) = native_codex_distribution() else {
+            return;
+        };
+        let root = unique_test_dir("native-codex");
+        let wrapper = root.join("node_modules/@openai/codex/bin/codex.js");
+        let native = root
+            .join("node_modules/@openai/codex/node_modules/@openai")
+            .join(package)
+            .join("vendor")
+            .join(target)
+            .join("bin/codex");
+        write_executable(&wrapper, b"#!/usr/bin/env node\n");
+        write_executable(&native, b"#!/bin/sh\n");
+
+        assert_eq!(
+            native_codex_for(&wrapper),
+            Some(fs::canonicalize(&native).unwrap())
+        );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn unique_test_dir(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        env::temp_dir().join(format!(
+            "sacred-seat-{label}-{}-{nonce}",
+            std::process::id()
+        ))
+    }
 }
 
 #[tauri::command]
@@ -108,7 +416,8 @@ async fn organize_policies(request: OrganizeRequest) -> Result<String, String> {
             policies = policies
         );
 
-        let mut child = Command::new(codex_binary())
+        let codex = resolve_codex_launch()?;
+        let mut child = Command::new(&codex.executable)
             .args([
                 "exec",
                 "--ephemeral",
@@ -122,11 +431,17 @@ async fn organize_policies(request: OrganizeRequest) -> Result<String, String> {
                 "-",
             ])
             .current_dir(std::env::temp_dir())
+            .env("PATH", &codex.path_env)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|error| format!("无法启动本机 Codex：{error}"))?;
+            .map_err(|error| {
+                format!(
+                    "无法启动本机 Codex（{}）：{error}",
+                    codex.executable.display()
+                )
+            })?;
 
         child
             .stdin
