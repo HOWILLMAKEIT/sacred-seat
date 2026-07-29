@@ -52,4 +52,5 @@ jobs:
           prerelease: false
           uploadUpdaterJson: true
           uploadUpdaterSignatures: true
+          releaseAssetNamePattern: Sacred-Seat_[version]_[arch].[ext]
           args: --target ${{ matrix.target }}
