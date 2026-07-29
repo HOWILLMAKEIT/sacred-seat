@@ -7,7 +7,8 @@ const outputDirectory = fileURLToPath(outputDirectoryUrl);
 await mkdir(outputDirectory, { recursive: true });
 
 function dateKey(daysAgo) {
-  const date = new Date(2026, 6, 28);
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
   date.setDate(date.getDate() - daysAgo);
   return [
     date.getFullYear(),
@@ -16,12 +17,27 @@ function dateKey(daysAgo) {
   ].join("-");
 }
 
-function completionLog(seed, activeDays) {
+function completionLog(seed, activeDays, currentStreak) {
+  const completedDays = new Set(
+    Array.from({ length: currentStreak }, (_, index) => index)
+  );
+
+  let index = 0;
+  while (completedDays.size < activeDays) {
+    const historicalRange = 80 - currentStreak - 3;
+    const daysAgo = currentStreak + 3
+      + ((index * seed + index * index + seed) % historicalRange);
+    completedDays.add(daysAgo);
+    index += 1;
+  }
+
   return Object.fromEntries(
-    Array.from({ length: activeDays }, (_, index) => {
-      const daysAgo = (index * seed + index * index + seed) % 80;
-      return [dateKey(daysAgo), 1 + ((index + seed) % 4)];
-    })
+    [...completedDays]
+      .sort((left, right) => right - left)
+      .map((daysAgo, position) => [
+        dateKey(daysAgo),
+        1 + ((position + seed) % 4)
+      ])
   );
 }
 
@@ -34,7 +50,7 @@ const demoState = {
       behavior: "只处理当前学习任务，不打开社交与娱乐应用",
       durationMinutes: 60,
       streak: 12,
-      completionLog: completionLog(3, 34),
+      completionLog: completionLog(3, 34, 12),
       precedents: [
         {
           id: "precedent-water",
@@ -50,7 +66,7 @@ const demoState = {
       behavior: "只运行当前实验，先记录结果再切换任务",
       durationMinutes: 90,
       streak: 8,
-      completionLog: completionLog(5, 27),
+      completionLog: completionLog(5, 27, 8),
       precedents: []
     },
     {
@@ -60,7 +76,7 @@ const demoState = {
       behavior: "完成当日阅读与笔记整理",
       durationMinutes: 45,
       streak: 5,
-      completionLog: completionLog(7, 18),
+      completionLog: completionLog(7, 18, 5),
       precedents: []
     }
   ],

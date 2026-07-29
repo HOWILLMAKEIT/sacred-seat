@@ -77,6 +77,11 @@ function localDateKey(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+function formatHeaderDate(date = new Date()): string {
+  const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+  return `${date.getMonth() + 1}月${date.getDate()}日 · 周${weekdays[date.getDay()]}`;
+}
+
 function recordCompletedSeat(seat: SacredSeat): SacredSeat {
   const today = localDateKey();
   const completionLog = seat.completionLog ?? {};
@@ -298,7 +303,7 @@ function App() {
             <h1>{view === "focus" ? "守住一次承诺" : "改变长期稳态"}</h1>
           </div>
           <div className="titlebar-actions">
-            <span className="date-chip">7月28日 · 周二</span>
+            <span className="date-chip">{formatHeaderDate()}</span>
           </div>
         </header>
 
