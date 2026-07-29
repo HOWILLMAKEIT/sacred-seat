@@ -386,6 +386,30 @@ button { color: inherit; }
 .daily-quote:hover p { color: #3f5d4e; }
 .daily-quote:hover small { color: #6f877b; }
 .sidebar-footer { display: flex; align-items: center; gap: 7px; padding: 0 10px; color: #969690; font-size: 10px; }
+.sidebar-update {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 9px 4px 0;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 9px;
+  color: #8b8d87;
+  background: transparent;
+  cursor: pointer;
+  font: 560 9px/1.2 "PingFang SC", sans-serif;
+  text-align: left;
+  transition: color .18s ease, background .18s ease;
+}
+.sidebar-update:hover {
+  color: #526d5e;
+  background: rgba(255, 255, 255, .42);
+}
+.sidebar-update.checking svg { animation: updateSpin .9s linear infinite; }
+.sidebar-update.available { color: #4e735f; }
+.sidebar-update.error { color: #a36a5d; }
+.sidebar-update:disabled { cursor: wait; }
+@keyframes updateSpin { to { transform: rotate(-360deg); } }
 
 .update-notice {
   position: fixed;

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import {
   FormEvent,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -58,6 +59,7 @@ const emptySession: FocusSession = {
 };
 
 type PolicyPlacement = "above" | "sibling-before" | "sibling-after" | "below";
+type UpdateCheckState = "idle" | "checking" | "current" | "available" | "error";
 
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -167,21 +169,61 @@ function App() {
   const [updateProgress, setUpdateProgress] = useState<number | null>(null);
   const [updateInstalling, setUpdateInstalling] = useState(false);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [updateCheckState, setUpdateCheckState] = useState<UpdateCheckState>("idle");
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const updateCheckInFlight = useRef(false);
+  const lastUpdateCheckAt = useRef(0);
   const dailyQuote = useMemo(() => quoteForDate(), []);
   const activeSeat = state.sacredSeats.find((seat) => seat.id === state.activeSeatId)
     ?? state.sacredSeats[0];
 
   useEffect(() => saveState(state), [state]);
 
+  const runUpdateCheck = useCallback(async (force = false) => {
+    const now = Date.now();
+    if (
+      updateCheckInFlight.current
+      || (!force && now - lastUpdateCheckAt.current < 5 * 60 * 1000)
+    ) {
+      return;
+    }
+
+    updateCheckInFlight.current = true;
+    lastUpdateCheckAt.current = now;
+    setUpdateCheckState("checking");
+    setUpdateError(null);
+
+    try {
+      const update = await findAvailableUpdate();
+      setAvailableUpdate(update);
+      setUpdateCheckState(update ? "available" : "current");
+      if (update) setUpdateDismissed(false);
+    } catch (error) {
+      setUpdateCheckState("error");
+      setUpdateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      updateCheckInFlight.current = false;
+    }
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void findAvailableUpdate()
-        .then(setAvailableUpdate)
-        .catch((error) => console.info("暂时无法检查更新", error));
+      void runUpdateCheck();
     }, 1600);
+    const interval = window.setInterval(() => {
+      void runUpdateCheck();
+    }, 30 * 60 * 1000);
+    const handleFocus = () => {
+      void runUpdateCheck();
+    };
+    window.addEventListener("focus", handleFocus);
 
-    return () => window.clearTimeout(timer);
-  }, []);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [runUpdateCheck]);
 
   useEffect(() => {
     if (!session.active) return;
@@ -294,6 +336,21 @@ function App() {
           <CircleDot size={14} />
           <span>所有数据仅保存在本机</span>
         </div>
+        <button
+          className={`sidebar-update ${updateCheckState}`}
+          onClick={() => void runUpdateCheck(true)}
+          disabled={updateCheckState === "checking"}
+          title={updateError ?? "立即检查新版本"}
+        >
+          <RotateCcw size={13} />
+          <span>
+            {updateCheckState === "checking" && "正在检查更新"}
+            {updateCheckState === "current" && "已是最新版本"}
+            {updateCheckState === "available" && "发现新版本"}
+            {updateCheckState === "error" && "检查失败 · 点击重试"}
+            {updateCheckState === "idle" && "检查更新"}
+          </span>
+        </button>
       </aside>
 
       <section className="workspace">
@@ -546,6 +603,10 @@ function App() {
                 console.error("更新安装失败", error);
                 setUpdateInstalling(false);
                 setUpdateProgress(null);
+                setUpdateCheckState("error");
+                setUpdateError(
+                  `更新安装失败：${error instanceof Error ? error.message : String(error)}`
+                );
               });
           }}
         />

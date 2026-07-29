@@ -1,10 +1,32 @@
-import { isTauri } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 
+const UPDATE_TIMEOUT_MS = 12_000;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function findAvailableUpdate(): Promise<Update | null> {
   if (!isTauri()) return null;
-  return check();
+
+  const proxy = await invoke<string | null>("system_proxy_url").catch(() => null);
+  if (!proxy) {
+    return check({ timeout: UPDATE_TIMEOUT_MS });
+  }
+
+  try {
+    return await check({ proxy, timeout: UPDATE_TIMEOUT_MS });
+  } catch (proxyError) {
+    try {
+      return await check({ timeout: UPDATE_TIMEOUT_MS });
+    } catch (directError) {
+      throw new Error(
+        `系统代理与直连均无法检查更新。代理：${errorMessage(proxyError)}；直连：${errorMessage(directError)}`
+      );
+    }
+  }
 }
 
 export async function installAvailableUpdate(

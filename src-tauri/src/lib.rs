@@ -287,6 +287,67 @@ fn extract_json(raw: &str) -> Result<String, String> {
     serde_json::to_string(&value).map_err(|error| error.to_string())
 }
 
+fn proxy_value(output: &str, key: &str) -> Option<String> {
+    output.lines().find_map(|line| {
+        let (name, value) = line.trim().split_once(':')?;
+        (name.trim() == key).then(|| value.trim().to_string())
+    })
+}
+
+fn proxy_url_from_scutil(output: &str) -> Option<String> {
+    for prefix in ["HTTPS", "HTTP"] {
+        if proxy_value(output, &format!("{prefix}Enable")).as_deref() != Some("1") {
+            continue;
+        }
+
+        let Some(host) = proxy_value(output, &format!("{prefix}Proxy")) else {
+            continue;
+        };
+        let Some(port) = proxy_value(output, &format!("{prefix}Port")) else {
+            continue;
+        };
+        if host.is_empty() || port.parse::<u16>().is_err() {
+            continue;
+        }
+
+        let formatted_host = if host.contains(':') && !host.starts_with('[') {
+            format!("[{host}]")
+        } else {
+            host
+        };
+        return Some(format!("http://{formatted_host}:{port}"));
+    }
+
+    None
+}
+
+#[tauri::command]
+fn system_proxy_url() -> Option<String> {
+    for key in ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"] {
+        if let Some(proxy) = env::var_os(key).and_then(|value| value.into_string().ok()) {
+            if proxy.starts_with("http://") || proxy.starts_with("https://") {
+                return Some(proxy);
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("/usr/sbin/scutil")
+            .arg("--proxy")
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+            .ok()?;
+
+        if output.status.success() {
+            return proxy_url_from_scutil(&String::from_utf8_lossy(&output.stdout));
+        }
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -336,6 +397,37 @@ mod tests {
         );
 
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn parses_enabled_https_system_proxy() {
+        let output = r#"
+<dictionary> {
+  HTTPEnable : 0
+  HTTPSEnable : 1
+  HTTPSPort : 7897
+  HTTPSProxy : 127.0.0.1
+}
+"#;
+
+        assert_eq!(
+            proxy_url_from_scutil(output),
+            Some("http://127.0.0.1:7897".to_string())
+        );
+    }
+
+    #[test]
+    fn ignores_disabled_system_proxy() {
+        let output = r#"
+<dictionary> {
+  HTTPEnable : 0
+  HTTPProxy : 127.0.0.1
+  HTTPPort : 7897
+  HTTPSEnable : 0
+}
+"#;
+
+        assert_eq!(proxy_url_from_scutil(output), None);
     }
 
     fn unique_test_dir(label: &str) -> PathBuf {
@@ -471,7 +563,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![organize_policies])
+        .invoke_handler(tauri::generate_handler![
+            organize_policies,
+            system_proxy_url
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Dingshi");
 }
