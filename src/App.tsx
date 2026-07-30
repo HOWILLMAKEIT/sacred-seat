@@ -227,9 +227,18 @@ function App() {
 
   useEffect(() => {
     if (!session.active) return;
-    const timer = window.setInterval(() => {
+
+    const syncSession = () => {
       setSession((current) => {
-        if (current.remainingSeconds <= 1) {
+        if (!current.active) return current;
+
+        const endsAt = current.startedAt + current.durationSeconds * 1000;
+        const remainingSeconds = Math.max(
+          0,
+          Math.ceil((endsAt - Date.now()) / 1000)
+        );
+
+        if (remainingSeconds === 0) {
           setState((previous) => ({
             ...updateSeat(
               previous,
@@ -239,10 +248,21 @@ function App() {
           }));
           return emptySession;
         }
-        return { ...current, remainingSeconds: current.remainingSeconds - 1 };
+
+        if (remainingSeconds === current.remainingSeconds) return current;
+        return { ...current, remainingSeconds };
       });
-    }, 1000);
-    return () => window.clearInterval(timer);
+    };
+
+    const timer = window.setInterval(syncSession, 1000);
+    window.addEventListener("focus", syncSession);
+    document.addEventListener("visibilitychange", syncSession);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", syncSession);
+      document.removeEventListener("visibilitychange", syncSession);
+    };
   }, [session.active]);
 
   const startFocus = () => {
