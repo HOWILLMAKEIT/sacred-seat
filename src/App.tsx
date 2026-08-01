@@ -32,6 +32,7 @@ import {
 } from "react";
 import { organizeWithCodex } from "./codex";
 import { quoteForDate } from "./dailyQuotes";
+import { HabitView } from "./HabitView";
 import { openExternalLink } from "./platform";
 import { loadState, saveState } from "./storage";
 import { findAvailableUpdate, installAvailableUpdate } from "./updater";
@@ -297,6 +298,14 @@ function App() {
             国策树
             <span className="nav-count">{state.policies.length}</span>
           </button>
+          <button
+            className={view === "habits" ? "nav-item active" : "nav-item"}
+            onClick={() => setView("habits")}
+          >
+            <CalendarDays size={17} />
+            习惯账本
+            <span className="nav-count">{state.habitTracker.habits.length}</span>
+          </button>
           <button className="nav-item" onClick={() => setGuideOpen(true)}>
             <BookOpen size={17} />
             方法说明
@@ -361,10 +370,10 @@ function App() {
         <header className="titlebar" data-tauri-drag-region>
           <div data-tauri-drag-region>
             <span className="eyebrow" data-tauri-drag-region>
-              {view === "focus" ? "CTDP" : "RSIP"}
+              {view === "focus" ? "CTDP" : view === "habits" ? "WEEKLY" : "RSIP"}
             </span>
             <h1 data-tauri-drag-region>
-              {view === "focus" ? "守住一次承诺" : "改变长期稳态"}
+              {view === "focus" ? "守住一次承诺" : view === "habits" ? "让坚持留下证据" : "改变长期稳态"}
             </h1>
           </div>
           <div className="titlebar-actions" data-tauri-drag-region>
@@ -382,6 +391,13 @@ function App() {
             onComplete={completeEarly}
             onJudge={() => setJudgmentOpen(true)}
             onEdit={() => setSeatEditorDraft(activeSeat)}
+          />
+        ) : view === "habits" ? (
+          <HabitView
+            tracker={state.habitTracker}
+            onChange={(habitTracker) =>
+              setState((previous) => ({ ...previous, habitTracker }))
+            }
           />
         ) : (
           <PolicyView

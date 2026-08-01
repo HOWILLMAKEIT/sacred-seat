@@ -1,4 +1,17 @@
-export type View = "focus" | "policies";
+export type View = "focus" | "habits" | "policies";
+
+export interface HabitDefinition {
+  id: string;
+  name: string;
+  kind: "check" | "number";
+  unit: string;
+  createdAt: string;
+}
+
+export interface HabitTracker {
+  habits: HabitDefinition[];
+  values: Record<string, Record<string, boolean | number>>;
+}
 
 export interface SacredSeat {
   id: string;
@@ -41,6 +54,7 @@ export interface AppState {
   sacredSeats: SacredSeat[];
   activeSeatId: string;
   policies: PolicyNode[];
+  habitTracker: HabitTracker;
 }
 
 export type CodexMode = "simplify" | "generate";

@@ -1,4 +1,4 @@
-import type { AppState, PolicyNode, SacredSeat } from "./types";
+import type { AppState, HabitTracker, PolicyNode, SacredSeat } from "./types";
 
 const STORAGE_KEY = "dingshi-state-v1";
 
@@ -22,6 +22,18 @@ export const defaultState: AppState = {
     }
   ],
   activeSeatId: "seat-1",
+  habitTracker: {
+    habits: [
+      { id: "habit-early-sleep", name: "早睡", kind: "check", unit: "", createdAt: "2026-07-27T00:00:00.000Z" },
+      { id: "habit-early-rise", name: "早起", kind: "check", unit: "", createdAt: "2026-07-27T00:00:00.000Z" },
+      { id: "habit-focused-study", name: "专注学习", kind: "number", unit: "小时", createdAt: "2026-07-27T00:00:00.000Z" },
+      { id: "habit-algorithms", name: "算法题", kind: "check", unit: "", createdAt: "2026-07-27T00:00:00.000Z" },
+      { id: "habit-workout", name: "健身", kind: "check", unit: "", createdAt: "2026-07-27T00:00:00.000Z" },
+      { id: "habit-report", name: "八点写日报", kind: "check", unit: "", createdAt: "2026-07-27T00:00:00.000Z" },
+      { id: "habit-recall", name: "八点回忆昨天干了什么", kind: "check", unit: "", createdAt: "2026-07-27T00:00:00.000Z" }
+    ],
+    values: {}
+  },
   policies: [
     {
       id: "policy-1",
@@ -76,6 +88,7 @@ type PersistedState = {
   sacredSeats?: PersistedSeat[];
   activeSeatId?: string;
   policies?: PolicyNode[];
+  habitTracker?: HabitTracker;
 };
 
 function normalizeSeat(seat: PersistedSeat): SacredSeat {
@@ -103,7 +116,8 @@ export function loadState(): AppState {
     return {
       sacredSeats,
       activeSeatId,
-      policies: stored.policies ?? defaultState.policies
+      policies: stored.policies ?? defaultState.policies,
+      habitTracker: stored.habitTracker ?? defaultState.habitTracker
     };
   } catch {
     return defaultState;
