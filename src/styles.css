@@ -1332,3 +1332,180 @@ body.policy-pointer-dragging * { cursor: grabbing !important; }
   .focus-layout { grid-template-columns: 1fr 320px; }
   .focus-hero { padding-inline: 22px; }
 }
+
+/* Focus dashboard: make today's result visible instead of hiding it in the heatmap. */
+.metric-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.metric-card.today-metric {
+  border-color: rgba(79, 116, 96, .16);
+  background: linear-gradient(145deg, rgba(225, 236, 229, .78), rgba(255, 255, 255, .58));
+}
+.metric-card.today-metric strong { color: var(--sage-dark); }
+
+/* A fixed, top-down policy tree with a persistent detail inspector. */
+.policy-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 292px;
+  gap: 15px;
+  align-items: start;
+}
+.policy-workbench .tree-canvas {
+  min-height: 620px;
+  padding: 19px 22px 42px;
+}
+.tree-mode-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 31px;
+  padding: 0 10px;
+  border: 1px solid rgba(61, 78, 67, .08);
+  border-radius: 9px;
+  color: #68756d;
+  background: rgba(248, 249, 246, .78);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: .04em;
+  pointer-events: auto;
+}
+.policy-workbench .tree-zoom-surface {
+  width: max-content;
+  min-width: 100%;
+  padding-top: 5px;
+  transform: none;
+}
+.policy-workbench .policy-forest {
+  align-items: flex-start;
+  padding: 38px 14px 24px;
+}
+.policy-workbench .policy-branch {
+  justify-content: flex-start;
+}
+.policy-workbench .policy-children {
+  align-items: flex-start;
+  order: 2;
+  margin: 38px 0 0;
+  padding: 20px 8px 0;
+}
+.policy-workbench .policy-children > .policy-branch {
+  align-self: flex-start;
+  justify-content: flex-start;
+}
+.policy-workbench .policy-node {
+  order: 1;
+  cursor: default;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.policy-workbench .policy-node:active { cursor: default; }
+.policy-node.selected {
+  border-color: rgba(67, 106, 85, .35);
+  box-shadow:
+    0 16px 34px rgba(50, 74, 61, .12),
+    0 0 0 4px rgba(92, 132, 110, .09),
+    inset 0 1px rgba(255, 255, 255, .84);
+}
+.policy-node.rolled-back .node-meta i { background: #aaa9a4; }
+.policy-node.rolled-back { opacity: .72; }
+
+.policy-detail {
+  position: sticky;
+  top: 18px;
+  min-height: 430px;
+  padding: 21px;
+  border-radius: 19px;
+}
+.policy-detail-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 17px;
+  border-bottom: 1px solid var(--hairline);
+}
+.policy-detail-heading h3 {
+  margin: 6px 0 0;
+  font: 620 17px/1.3 "Songti SC", "STSong", serif;
+}
+.policy-status-chip {
+  flex: none;
+  padding: 6px 8px;
+  border-radius: 99px;
+  color: #8d7356;
+  background: rgba(239, 224, 201, .62);
+  font-size: 8px;
+  font-weight: 700;
+}
+.policy-status-chip.stable { color: #547060; background: rgba(213, 229, 219, .76); }
+.policy-status-chip.rolled-back { color: #777872; background: rgba(226, 226, 221, .78); }
+.policy-detail-content {
+  margin: 22px 0;
+  color: #323731;
+  font: 600 17px/1.72 "Songti SC", "STSong", serif;
+}
+.policy-detail-meta {
+  display: grid;
+  gap: 0;
+  margin: 0 0 20px;
+  border-top: 1px solid var(--hairline);
+}
+.policy-detail-meta > div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 10px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.policy-detail-meta dt { color: #969791; font-size: 9px; }
+.policy-detail-meta dd {
+  margin: 0;
+  color: #5f625c;
+  font: 11px/1.55 "Songti SC", "STSong", serif;
+}
+.policy-status-control {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(53, 57, 51, .07);
+  border-radius: 10px;
+  background: rgba(229, 232, 226, .54);
+}
+.policy-status-control button {
+  min-height: 31px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 7px;
+  color: #858781;
+  background: transparent;
+  cursor: pointer;
+  font-size: 9px;
+}
+.policy-status-control button.active {
+  color: #405b4d;
+  background: rgba(255, 255, 255, .88);
+  box-shadow: 0 2px 7px rgba(51, 60, 54, .08);
+}
+.policy-detail-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 7px;
+  margin-top: 20px;
+}
+.policy-detail-actions button { justify-content: center; }
+.danger-text { color: #a15f59 !important; }
+.policy-detail-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 115px 10px;
+  color: #989a94;
+  text-align: center;
+}
+.policy-detail-empty strong { color: #62655f; font: 600 14px "Songti SC", "STSong", serif; }
+.policy-detail-empty span { font-size: 9px; }
+
+@media (max-width: 1180px) {
+  .policy-workbench { grid-template-columns: minmax(0, 1fr) 260px; }
+  .policy-detail { padding: 18px; }
+  .policy-detail-content { font-size: 15px; }
+}

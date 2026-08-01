@@ -11,7 +11,6 @@ import {
   Command,
   Focus,
   GitBranch,
-  Maximize2,
   Pause,
   Play,
   Plus,
@@ -21,8 +20,6 @@ import {
   Sparkles,
   Trash2,
   X,
-  ZoomIn,
-  ZoomOut
 } from "lucide-react";
 import {
   FormEvent,
@@ -58,7 +55,6 @@ const emptySession: FocusSession = {
   active: false
 };
 
-type PolicyPlacement = "above" | "sibling-before" | "sibling-after" | "below";
 type UpdateCheckState = "idle" | "checking" | "current" | "available" | "error";
 
 function makeId(prefix: string): string {
@@ -140,20 +136,6 @@ function policyBranchIds(rootId: string, nodes: PolicyNode[]): Set<string> {
   return branchIds;
 }
 
-function placementAtPoint(
-  card: HTMLElement,
-  clientX: number,
-  clientY: number
-): PolicyPlacement {
-  const bounds = card.getBoundingClientRect();
-  const ratio = (clientY - bounds.top) / bounds.height;
-  if (ratio < 0.28) return "above";
-  if (ratio > 0.72) return "below";
-  return clientX < bounds.left + bounds.width / 2
-    ? "sibling-before"
-    : "sibling-after";
-}
-
 function App() {
   const [state, setState] = useState<AppState>(() => loadState());
   const [view, setView] = useState<View>("focus");
@@ -162,6 +144,7 @@ function App() {
   const [seatEditorDraft, setSeatEditorDraft] = useState<SacredSeat | null>(null);
   const [seatManagerOpen, setSeatManagerOpen] = useState(false);
   const [policyEditorOpen, setPolicyEditorOpen] = useState(false);
+  const [policyEditorDraft, setPolicyEditorDraft] = useState<PolicyNode | null>(null);
   const [codexOpen, setCodexOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [deletePolicyId, setDeletePolicyId] = useState<string | null>(null);
@@ -402,87 +385,21 @@ function App() {
         ) : (
           <PolicyView
             nodes={state.policies}
-            onAdd={() => setPolicyEditorOpen(true)}
+            onAdd={() => {
+              setPolicyEditorDraft(null);
+              setPolicyEditorOpen(true);
+            }}
+            onEdit={(node) => {
+              setPolicyEditorDraft(node);
+              setPolicyEditorOpen(true);
+            }}
             onCodex={() => setCodexOpen(true)}
             onDelete={setDeletePolicyId}
-            onMove={(draggedId, targetId, placement) => {
-              setState((previous) => {
-                const nodes = previous.policies;
-                if (draggedId === targetId) return previous;
-
-                const draggedBranch = policyBranchIds(draggedId, nodes);
-                const dragged = nodes.find((node) => node.id === draggedId);
-                const target = nodes.find((node) => node.id === targetId);
-                if (!dragged || !target) return previous;
-
-                const targetWasInsideDraggedBranch = draggedBranch.has(targetId);
-                const targetParentId = targetWasInsideDraggedBranch
-                  ? dragged.parentId
-                  : target.parentId;
-
-                if (placement === "below" && target.parentId === draggedId) {
-                  return previous;
-                }
-
-                const updated = nodes.map((node) => {
-                  if (targetWasInsideDraggedBranch && node.id === targetId) {
-                    if (placement === "below") {
-                      return { ...node, parentId: draggedId };
-                    }
-                    return { ...node, parentId: targetParentId };
-                  }
-                  if (placement === "above" && node.id === draggedId) {
-                    return { ...node, parentId: targetId };
-                  }
-                  if (
-                    (placement === "sibling-before" || placement === "sibling-after")
-                    && node.id === draggedId
-                  ) {
-                    return { ...node, parentId: targetParentId };
-                  }
-                  if (placement === "below" && node.id === draggedId) {
-                    return { ...node, parentId: targetParentId };
-                  }
-                  if (placement === "below" && node.id === targetId) {
-                    return { ...node, parentId: draggedId };
-                  }
-                  return node;
-                });
-
-                if (placement !== "sibling-before" && placement !== "sibling-after") {
-                  return { ...previous, policies: updated };
-                }
-
-                const movedNode = updated.find((node) => node.id === draggedId);
-                if (!movedNode) return previous;
-                const reordered = updated.filter((node) => node.id !== draggedId);
-                const targetIndex = reordered.findIndex((node) => node.id === targetId);
-                reordered.splice(
-                  targetIndex + (placement === "sibling-after" ? 1 : 0),
-                  0,
-                  movedNode
-                );
-                return { ...previous, policies: reordered };
-              });
-            }}
-            onDetach={(nodeId) =>
+            onStatusChange={(id, status) =>
               setState((previous) => ({
                 ...previous,
                 policies: previous.policies.map((node) =>
-                  node.id === nodeId ? { ...node, parentId: null } : node
-                )
-              }))
-            }
-            onToggleStatus={(id) =>
-              setState((previous) => ({
-                ...previous,
-                policies: previous.policies.map((node) =>
-                  node.id === id
-                    ? {
-                        ...node,
-                        status: node.status === "stable" ? "active" : "stable"
-                      }
-                    : node
+                  node.id === id ? { ...node, status } : node
                 )
               }))
             }
@@ -571,13 +488,23 @@ function App() {
 
       {policyEditorOpen && (
         <PolicyEditor
-          onClose={() => setPolicyEditorOpen(false)}
-          onSave={(node) => {
-            setState((previous) => ({
-              ...previous,
-              policies: [...previous.policies, node]
-            }));
+          node={policyEditorDraft}
+          onClose={() => {
             setPolicyEditorOpen(false);
+            setPolicyEditorDraft(null);
+          }}
+          onSave={(node) => {
+            setState((previous) => {
+              const exists = previous.policies.some((item) => item.id === node.id);
+              return {
+                ...previous,
+                policies: exists
+                  ? previous.policies.map((item) => item.id === node.id ? node : item)
+                  : [...previous.policies, node]
+              };
+            });
+            setPolicyEditorOpen(false);
+            setPolicyEditorDraft(null);
           }}
         />
       )}
@@ -855,6 +782,7 @@ function FocusView({
   onJudge: () => void;
   onEdit: () => void;
 }) {
+  const todayCount = seat.completionLog?.[localDateKey()] ?? 0;
   const progress = session.active
     ? ((session.durationSeconds - session.remainingSeconds) / session.durationSeconds) * 100
     : 0;
@@ -919,6 +847,11 @@ function FocusView({
 
       <aside className="focus-inspector">
         <section className="metric-row">
+          <article className="metric-card today-metric">
+            <span>今日完成</span>
+            <strong>{todayCount}</strong>
+            <small>次承诺</small>
+          </article>
           <article className="metric-card">
             <span>当前链长</span>
             <strong>{seat.streak}</strong>
@@ -966,88 +899,34 @@ function PolicyView({
   onAdd,
   onCodex,
   onDelete,
-  onMove,
-  onDetach,
-  onToggleStatus
+  onEdit,
+  onStatusChange
 }: {
   nodes: PolicyNode[];
   onAdd: () => void;
   onCodex: () => void;
   onDelete: (id: string) => void;
-  onMove: (draggedId: string, targetId: string, placement: PolicyPlacement) => void;
-  onDetach: (nodeId: string) => void;
-  onToggleStatus: (id: string) => void;
+  onEdit: (node: PolicyNode) => void;
+  onStatusChange: (id: string, status: PolicyNode["status"]) => void;
 }) {
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const treeCanvasRef = useRef<HTMLElement | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(nodes[0]?.id ?? null);
   const treeSurfaceRef = useRef<HTMLDivElement | null>(null);
   const connectorSvgRef = useRef<SVGSVGElement | null>(null);
-  const dragGhostRef = useRef<HTMLDivElement | null>(null);
-  const ghostPositionRef = useRef({ x: 0, y: 0 });
-  const ghostFrameRef = useRef<number | null>(null);
-  const nodePositionsRef = useRef<Map<string, DOMRect>>(new Map());
-  const pointerDragRef = useRef<{
-    id: string;
-    startX: number;
-    startY: number;
-    active: boolean;
-  } | null>(null);
-  const dropTargetRef = useRef<{
-    id: string;
-    placement: PolicyPlacement;
-  } | null>(null);
-  const suppressNodeClickRef = useRef(false);
-  const [dropTarget, setDropTarget] = useState<{
-    id: string;
-    placement: PolicyPlacement;
-  } | null>(null);
   const roots = nodes.filter((node) =>
     !node.parentId || !nodes.some((candidate) => candidate.id === node.parentId)
   );
+  const selectedNode = nodes.find((node) => node.id === selectedId) ?? null;
+  const selectedParent = selectedNode?.parentId
+    ? nodes.find((node) => node.id === selectedNode.parentId)
+    : null;
+  const selectedChildren = selectedNode
+    ? nodes.filter((node) => node.parentId === selectedNode.id)
+    : [];
 
-  useLayoutEffect(() => {
-    const cards = Array.from(
-      document.querySelectorAll<HTMLElement>(".policy-node[data-policy-id]")
-    );
-    const nextPositions = new Map(
-      cards.map((card) => [card.dataset.policyId!, card.getBoundingClientRect()])
-    );
-    const previousPositions = nodePositionsRef.current;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    if (previousPositions.size && !reduceMotion) {
-      cards.forEach((card) => {
-        const id = card.dataset.policyId!;
-        const previous = previousPositions.get(id);
-        const current = nextPositions.get(id);
-        if (!previous || !current) return;
-
-        const deltaX = previous.left - current.left;
-        const deltaY = previous.top - current.top;
-        if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return;
-
-        card.animate(
-          [
-            {
-              transform: `translate3d(${deltaX}px, ${deltaY}px, 0) scale(.985)`,
-              opacity: 0.82
-            },
-            {
-              transform: "translate3d(0, 0, 0) scale(1)",
-              opacity: 1
-            }
-          ],
-          {
-            duration: 430,
-            easing: "cubic-bezier(.22, 1, .36, 1)"
-          }
-        );
-      });
-    }
-
-    nodePositionsRef.current = nextPositions;
-  }, [nodes, zoom]);
+  useEffect(() => {
+    if (selectedId && nodes.some((node) => node.id === selectedId)) return;
+    setSelectedId(nodes[0]?.id ?? null);
+  }, [nodes, selectedId]);
 
   useLayoutEffect(() => {
     const surface = treeSurfaceRef.current;
@@ -1074,8 +953,8 @@ function PolicyView({
 
       nodes.forEach((node) => {
         if (!node.parentId) return;
-        const upperCard = cards.get(node.id);
-        const lowerCard = cards.get(node.parentId);
+        const upperCard = cards.get(node.parentId);
+        const lowerCard = cards.get(node.id);
         const path = paths.get(node.id);
         if (!upperCard || !lowerCard || !path) return;
 
@@ -1083,12 +962,12 @@ function PolicyView({
         const lowerBounds = lowerCard.getBoundingClientRect();
         const startX = (
           upperBounds.left + upperBounds.width / 2 - surfaceBounds.left
-        ) / zoom;
-        const startY = (upperBounds.bottom - surfaceBounds.top) / zoom;
+        );
+        const startY = upperBounds.bottom - surfaceBounds.top;
         const endX = (
           lowerBounds.left + lowerBounds.width / 2 - surfaceBounds.left
-        ) / zoom;
-        const endY = (lowerBounds.top - surfaceBounds.top) / zoom;
+        );
+        const endY = lowerBounds.top - surfaceBounds.top;
         const middleY = startY + (endY - startY) * 0.52;
 
         path.setAttribute(
@@ -1116,168 +995,14 @@ function PolicyView({
       observer.disconnect();
       window.removeEventListener("resize", updateConnectors);
     };
-  }, [nodes, zoom, draggingId, dropTarget]);
-
-  useEffect(() => {
-    const positionGhost = (clientX: number, clientY: number) => {
-      ghostPositionRef.current = { x: clientX, y: clientY };
-      if (ghostFrameRef.current !== null) return;
-      ghostFrameRef.current = window.requestAnimationFrame(() => {
-        ghostFrameRef.current = null;
-        const ghost = dragGhostRef.current;
-        if (!ghost) return;
-        const position = ghostPositionRef.current;
-        ghost.style.transform = `translate3d(${position.x + 14}px, ${position.y + 14}px, 0) rotate(1deg)`;
-      });
-    };
-
-    const autoScrollCanvas = (clientX: number, clientY: number) => {
-      const canvas = treeCanvasRef.current;
-      if (!canvas) return;
-      const bounds = canvas.getBoundingClientRect();
-      const edge = 54;
-      const horizontal = clientX < bounds.left + edge
-        ? -16
-        : clientX > bounds.right - edge
-          ? 16
-          : 0;
-      const vertical = clientY < bounds.top + edge
-        ? -13
-        : clientY > bounds.bottom - edge
-          ? 13
-          : 0;
-      if (horizontal || vertical) canvas.scrollBy(horizontal, vertical);
-    };
-
-    const resetDrag = () => {
-      pointerDragRef.current = null;
-      dropTargetRef.current = null;
-      setDraggingId(null);
-      setDropTarget(null);
-      document.body.classList.remove("policy-pointer-dragging");
-      if (ghostFrameRef.current !== null) {
-        window.cancelAnimationFrame(ghostFrameRef.current);
-        ghostFrameRef.current = null;
-      }
-    };
-
-    const cardAtPoint = (clientX: number, clientY: number) => {
-      const element = document.elementFromPoint(clientX, clientY);
-      return element?.closest<HTMLElement>(".policy-node") ?? null;
-    };
-
-    const handlePointerMove = (event: PointerEvent) => {
-      const current = pointerDragRef.current;
-      if (!current) return;
-
-      const distance = Math.hypot(
-        event.clientX - current.startX,
-        event.clientY - current.startY
-      );
-      if (!current.active && distance < 5) return;
-
-      if (!current.active) {
-        current.active = true;
-        setDraggingId(current.id);
-        document.body.classList.add("policy-pointer-dragging");
-      }
-
-      event.preventDefault();
-      positionGhost(event.clientX, event.clientY);
-      autoScrollCanvas(event.clientX, event.clientY);
-      const card = cardAtPoint(event.clientX, event.clientY);
-      const targetId = card?.dataset.policyId;
-
-      if (!card || !targetId || targetId === current.id) {
-        if (!dropTargetRef.current) return;
-        dropTargetRef.current = null;
-        setDropTarget(null);
-        return;
-      }
-
-      const nextTarget = {
-        id: targetId,
-        placement: placementAtPoint(card, event.clientX, event.clientY)
-      };
-      const previousTarget = dropTargetRef.current;
-      if (
-        previousTarget?.id === nextTarget.id
-        && previousTarget.placement === nextTarget.placement
-      ) {
-        return;
-      }
-      dropTargetRef.current = nextTarget;
-      setDropTarget(nextTarget);
-    };
-
-    const handlePointerUp = (event: PointerEvent) => {
-      const current = pointerDragRef.current;
-      if (!current) return;
-
-      if (current.active) {
-        suppressNodeClickRef.current = true;
-        const target = dropTargetRef.current;
-        if (target && target.id !== current.id) {
-          onMove(
-            current.id,
-            target.id,
-            target.placement
-          );
-        } else {
-          onDetach(current.id);
-        }
-        window.setTimeout(() => {
-          suppressNodeClickRef.current = false;
-        }, 0);
-      }
-
-      resetDrag();
-    };
-
-    window.addEventListener("pointermove", handlePointerMove, { passive: false });
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", resetDrag);
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", resetDrag);
-    };
-  }, [onDetach, onMove]);
-
-  const fitTreeToCanvas = () => {
-    const canvas = treeCanvasRef.current;
-    const surface = treeSurfaceRef.current;
-    const forest = surface?.querySelector<HTMLElement>(".policy-forest");
-    if (!canvas || !forest) return;
-
-    const availableWidth = Math.max(240, canvas.clientWidth - 54);
-    const availableHeight = Math.max(260, canvas.clientHeight - 92);
-    const contentWidth = Math.max(1, forest.offsetWidth);
-    const contentHeight = Math.max(1, forest.offsetHeight);
-    const nextZoom = Math.min(
-      1,
-      availableWidth / contentWidth,
-      availableHeight / contentHeight
-    );
-    setZoom(Math.max(0.2, Math.round(nextZoom * 20) / 20));
-
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        canvas.scrollTo({
-          left: Math.max(0, (canvas.scrollWidth - canvas.clientWidth) / 2),
-          top: 0,
-          behavior: "smooth"
-        });
-      });
-    });
-  };
+  }, [nodes]);
 
   return (
     <div className="policy-layout enter">
       <section className="policy-toolbar">
         <div className="policy-explainer">
           <span className="section-kicker">国策结构</span>
-          <p>上层是可以先做到的小目标，下层逐步通向最终目标。拖动节点即可调整关系。</p>
+          <p>最终目标位于树根，支撑国策逐层向下展开。点击任意节点查看明细与编辑内容。</p>
         </div>
         <div className="toolbar-actions">
           <button className="secondary-button" onClick={onCodex}>
@@ -1291,67 +1016,19 @@ function PolicyView({
         </div>
       </section>
 
-      <section
-        ref={treeCanvasRef}
-        className={draggingId ? "tree-canvas panel arranging" : "tree-canvas panel"}
-        onWheel={(event) => {
-          if (!event.metaKey && !event.ctrlKey) return;
-          event.preventDefault();
-          setZoom((current) => {
-            const next = current + (event.deltaY < 0 ? 0.1 : -0.1);
-            return Math.min(1.4, Math.max(0.2, Math.round(next * 10) / 10));
-          });
-        }}
-      >
-        <div className="tree-canvas-toolbar">
-          <div className="zoom-controls" aria-label="画布缩放">
-            <button
-              aria-label="缩小画布"
-              title="缩小"
-              onClick={() => setZoom((current) => Math.max(0.2, current - 0.1))}
-              disabled={zoom <= 0.2}
-            >
-              <ZoomOut size={14} />
-            </button>
-            <button
-              className="zoom-value"
-              title="恢复 100%"
-              onClick={() => setZoom(1)}
-            >
-              {Math.round(zoom * 100)}%
-            </button>
-            <button
-              aria-label="放大画布"
-              title="放大"
-              onClick={() => setZoom((current) => Math.min(1.4, current + 0.1))}
-              disabled={zoom >= 1.4}
-            >
-              <ZoomIn size={14} />
-            </button>
-            <span className="zoom-divider" />
-            <button
-              aria-label="显示全部节点"
-              title="适应全部节点"
-              onClick={fitTreeToCanvas}
-            >
-              <Maximize2 size={13} />
-            </button>
-          </div>
+      <div className="policy-workbench">
+        <section className="tree-canvas panel">
+          <div className="tree-canvas-toolbar">
+            <span className="tree-mode-label"><GitBranch size={13} /> 固定树形视图</span>
           <div className="tree-legend">
             <span><i className="legend-dot stable" />已稳定</span>
             <span><i className="legend-dot active" />执行中</span>
           </div>
         </div>
-        {draggingId && (
-          <div className="detach-hint">
-            拖到画布空白处，可将节点设为独立目标
-          </div>
-        )}
 
         <div
           ref={treeSurfaceRef}
           className="tree-zoom-surface"
-          style={{ zoom } as React.CSSProperties}
         >
           <svg
             ref={connectorSvgRef}
@@ -1375,22 +1052,8 @@ function PolicyView({
                   node={node}
                   nodes={nodes}
                   depth={0}
-                  onDelete={onDelete}
-                  onToggleStatus={(id) => {
-                    if (!suppressNodeClickRef.current) onToggleStatus(id);
-                  }}
-                  draggingId={draggingId}
-                  dropTarget={dropTarget}
-                  onPointerStart={(id, clientX, clientY) => {
-                    dropTargetRef.current = null;
-                    ghostPositionRef.current = { x: clientX, y: clientY };
-                    pointerDragRef.current = {
-                      id,
-                      startX: clientX,
-                      startY: clientY,
-                      active: false
-                    };
-                  }}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
                 />
               ))}
             </div>
@@ -1402,19 +1065,67 @@ function PolicyView({
             </div>
           )}
         </div>
-      </section>
-      {draggingId && (
-        <div
-          ref={dragGhostRef}
-          className="node-drag-ghost"
-          style={{
-            transform: `translate3d(${ghostPositionRef.current.x + 14}px, ${ghostPositionRef.current.y + 14}px, 0) rotate(1deg)`
-          }}
-        >
-          {nodes.find((node) => node.id === draggingId)?.rule
-            || nodes.find((node) => node.id === draggingId)?.title}
-        </div>
-      )}
+        </section>
+
+        <aside className="policy-detail panel">
+          {selectedNode ? (
+            <>
+              <div className="policy-detail-heading">
+                <div>
+                  <span className="section-kicker">节点明细</span>
+                  <h3>{selectedNode.kind === "goal" ? "最终目标" : "支撑国策"}</h3>
+                </div>
+                <span className={`policy-status-chip ${selectedNode.status}`}>
+                  {selectedNode.status === "stable"
+                    ? "已稳定"
+                    : selectedNode.status === "rolled-back"
+                      ? "已回滚"
+                      : "执行中"}
+                </span>
+              </div>
+
+              <p className="policy-detail-content">{selectedNode.rule || selectedNode.title}</p>
+
+              <dl className="policy-detail-meta">
+                <div><dt>服务目标</dt><dd>{selectedParent?.rule || selectedParent?.title || "独立目标"}</dd></div>
+                <div><dt>下层节点</dt><dd>{selectedChildren.length} 个</dd></div>
+                <div><dt>创建时间</dt><dd>{new Date(selectedNode.createdAt).toLocaleDateString("zh-CN")}</dd></div>
+              </dl>
+
+              <div className="policy-status-control" aria-label="节点状态">
+                {([
+                  ["active", "执行中"],
+                  ["stable", "已稳定"],
+                  ["rolled-back", "已回滚"]
+                ] as const).map(([status, label]) => (
+                  <button
+                    key={status}
+                    className={selectedNode.status === status ? "active" : ""}
+                    onClick={() => onStatusChange(selectedNode.id, status)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="policy-detail-actions">
+                <button className="primary-button" onClick={() => onEdit(selectedNode)}>
+                  <Settings2 size={15} /> 编辑内容
+                </button>
+                <button className="secondary-button danger-text" onClick={() => onDelete(selectedNode.id)}>
+                  <Trash2 size={14} /> 删除
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="policy-detail-empty">
+              <GitBranch size={22} />
+              <strong>选择一个节点</strong>
+              <span>点击树中的节点查看完整内容。</span>
+            </div>
+          )}
+        </aside>
+      </div>
     </div>
   );
 }
@@ -1423,27 +1134,46 @@ function PolicyBranch({
   node,
   nodes,
   depth,
-  onDelete,
-  onToggleStatus,
-  draggingId,
-  dropTarget,
-  onPointerStart
+  selectedId,
+  onSelect
 }: {
   node: PolicyNode;
   nodes: PolicyNode[];
   depth: number;
-  onDelete: (id: string) => void;
-  onToggleStatus: (id: string) => void;
-  draggingId: string | null;
-  dropTarget: { id: string; placement: PolicyPlacement } | null;
-  onPointerStart: (id: string, clientX: number, clientY: number) => void;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
 }) {
   const children = nodes.filter((candidate) => candidate.parentId === node.id);
   const content = node.rule || node.title;
-  const activePlacement = dropTarget?.id === node.id ? dropTarget.placement : null;
 
   return (
     <div className="policy-branch">
+      <article
+        className={[
+          "policy-node",
+          node.status,
+          selectedId === node.id ? "selected" : ""
+        ].filter(Boolean).join(" ")}
+        data-policy-id={node.id}
+      >
+        <button className="node-content" onClick={() => onSelect(node.id)}>
+          <div className="node-meta">
+            <span>{depth === 0 ? "最终目标" : `支撑层级 · ${depth}`}</span>
+            <i />
+          </div>
+          <strong>{content}</strong>
+          <div className="node-status">
+            {node.status === "stable" ? (
+              <><Check size={13} /> 已稳定</>
+            ) : node.status === "rolled-back" ? (
+              <><RotateCcw size={13} /> 已回滚</>
+            ) : (
+              <><Clock3 size={13} /> 执行中</>
+            )}
+          </div>
+        </button>
+      </article>
+
       {children.length > 0 && (
         <div className="policy-children">
           {children.map((child) => (
@@ -1452,65 +1182,12 @@ function PolicyBranch({
               node={child}
               nodes={nodes}
               depth={depth + 1}
-              onDelete={onDelete}
-              onToggleStatus={onToggleStatus}
-              draggingId={draggingId}
-              dropTarget={dropTarget}
-              onPointerStart={onPointerStart}
+              selectedId={selectedId}
+              onSelect={onSelect}
             />
           ))}
         </div>
       )}
-
-      <article
-        className={[
-          "policy-node",
-          node.status,
-          draggingId === node.id ? "dragging" : "",
-          activePlacement ? `drop-${activePlacement}` : ""
-        ].filter(Boolean).join(" ")}
-        data-policy-id={node.id}
-        onPointerDown={(event) => {
-          if (event.button !== 0) return;
-          if ((event.target as HTMLElement).closest(".node-delete")) return;
-          onPointerStart(node.id, event.clientX, event.clientY);
-        }}
-      >
-        {activePlacement && (
-          <span className={`drop-cue ${activePlacement}`}>
-            {activePlacement === "above"
-              ? "设为上层小目标"
-              : activePlacement === "sibling-before"
-                ? "并列到左侧"
-                : activePlacement === "sibling-after"
-                  ? "并列到右侧"
-                : "设为下层目标"}
-          </span>
-        )}
-        <button
-          className="node-delete"
-          aria-label={`删除 ${content}`}
-          title="删除节点及其下层节点"
-          onClick={() => onDelete(node.id)}
-        >
-          <Trash2 size={14} />
-        </button>
-        <button className="node-content" onClick={() => onToggleStatus(node.id)}>
-          <div className="node-meta">
-            <span>{depth === 0 ? "最终目标" : `上层目标 · ${depth}`}</span>
-            <i />
-          </div>
-          <strong>{content}</strong>
-          <div className="node-status">
-            {node.status === "stable" ? (
-              <><Check size={13} /> 已稳定</>
-            ) : (
-              <><Clock3 size={13} /> 执行中</>
-            )}
-          </div>
-        </button>
-      </article>
-
     </div>
   );
 }
@@ -1988,31 +1665,33 @@ function SeatEditor({
 }
 
 function PolicyEditor({
+  node,
   onClose,
   onSave
 }: {
+  node: PolicyNode | null;
   onClose: () => void;
   onSave: (node: PolicyNode) => void;
 }) {
-  const [content, setContent] = useState("");
+  const [content, setContent] = useState(node?.rule || node?.title || "");
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const normalizedContent = content.trim();
     onSave({
-      id: makeId("policy"),
+      id: node?.id ?? makeId("policy"),
       title: normalizedContent,
-      trigger: "",
+      trigger: node?.trigger ?? "",
       rule: normalizedContent,
-      parentId: null,
-      kind: "requirement",
-      status: "active",
-      createdAt: new Date().toISOString()
+      parentId: node?.parentId ?? null,
+      kind: node?.kind ?? "requirement",
+      status: node?.status ?? "active",
+      createdAt: node?.createdAt ?? new Date().toISOString()
     });
   };
 
   return (
-    <Sheet title="添加国策节点" subtitle="RSIP 国策树" onClose={onClose}>
+    <Sheet title={node ? "编辑国策节点" : "添加国策节点"} subtitle="RSIP 国策树" onClose={onClose}>
       <form onSubmit={submit}>
         <label className="field">
           <span>节点内容</span>
@@ -2024,10 +1703,14 @@ function PolicyEditor({
             required
           />
         </label>
-        <p className="editor-hint">节点创建后会先独立显示。拖动它到其他节点的上方或下方，即可建立关系。</p>
+        <p className="editor-hint">
+          {node
+            ? "修改后会保留节点原有的树关系、状态和创建时间。"
+            : "新节点会先作为独立目标显示，后续可由 Codex 辅助整理树关系。"}
+        </p>
         <footer className="sheet-footer">
           <button type="button" className="secondary-button" onClick={onClose}>取消</button>
-          <button type="submit" className="primary-button">添加节点</button>
+          <button type="submit" className="primary-button">{node ? "保存修改" : "添加节点"}</button>
         </footer>
       </form>
     </Sheet>
