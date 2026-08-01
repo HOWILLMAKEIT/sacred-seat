@@ -145,6 +145,7 @@ function App() {
   const [seatManagerOpen, setSeatManagerOpen] = useState(false);
   const [policyEditorOpen, setPolicyEditorOpen] = useState(false);
   const [policyEditorDraft, setPolicyEditorDraft] = useState<PolicyNode | null>(null);
+  const [policyEditorParentId, setPolicyEditorParentId] = useState<string | null>(null);
   const [codexOpen, setCodexOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [deletePolicyId, setDeletePolicyId] = useState<string | null>(null);
@@ -387,10 +388,17 @@ function App() {
             nodes={state.policies}
             onAdd={() => {
               setPolicyEditorDraft(null);
+              setPolicyEditorParentId(null);
+              setPolicyEditorOpen(true);
+            }}
+            onAddChild={(parentId) => {
+              setPolicyEditorDraft(null);
+              setPolicyEditorParentId(parentId);
               setPolicyEditorOpen(true);
             }}
             onEdit={(node) => {
               setPolicyEditorDraft(node);
+              setPolicyEditorParentId(node.parentId);
               setPolicyEditorOpen(true);
             }}
             onCodex={() => setCodexOpen(true)}
@@ -489,9 +497,12 @@ function App() {
       {policyEditorOpen && (
         <PolicyEditor
           node={policyEditorDraft}
+          nodes={state.policies}
+          parentId={policyEditorParentId}
           onClose={() => {
             setPolicyEditorOpen(false);
             setPolicyEditorDraft(null);
+            setPolicyEditorParentId(null);
           }}
           onSave={(node) => {
             setState((previous) => {
@@ -505,6 +516,7 @@ function App() {
             });
             setPolicyEditorOpen(false);
             setPolicyEditorDraft(null);
+            setPolicyEditorParentId(null);
           }}
         />
       )}
@@ -897,6 +909,7 @@ function FocusView({
 function PolicyView({
   nodes,
   onAdd,
+  onAddChild,
   onCodex,
   onDelete,
   onEdit,
@@ -904,6 +917,7 @@ function PolicyView({
 }: {
   nodes: PolicyNode[];
   onAdd: () => void;
+  onAddChild: (parentId: string) => void;
   onCodex: () => void;
   onDelete: (id: string) => void;
   onEdit: (node: PolicyNode) => void;
@@ -1001,8 +1015,8 @@ function PolicyView({
     <div className="policy-layout enter">
       <section className="policy-toolbar">
         <div className="policy-explainer">
-          <span className="section-kicker">国策结构</span>
-          <p>最终目标位于树根，支撑国策逐层向下展开。点击任意节点查看明细与编辑内容。</p>
+          <span className="section-kicker">国策地图 · {nodes.length} 个节点</span>
+          <p>从最终目标向下拆解可执行国策。单击查看，双击编辑，悬停可添加下一层。</p>
         </div>
         <div className="toolbar-actions">
           <button className="secondary-button" onClick={onCodex}>
@@ -1054,6 +1068,8 @@ function PolicyView({
                   depth={0}
                   selectedId={selectedId}
                   onSelect={setSelectedId}
+                  onAddChild={onAddChild}
+                  onEdit={onEdit}
                 />
               ))}
             </div>
@@ -1112,6 +1128,9 @@ function PolicyView({
                 <button className="primary-button" onClick={() => onEdit(selectedNode)}>
                   <Settings2 size={15} /> 编辑内容
                 </button>
+                <button className="secondary-button" onClick={() => onAddChild(selectedNode.id)}>
+                  <Plus size={14} /> 下一层
+                </button>
                 <button className="secondary-button danger-text" onClick={() => onDelete(selectedNode.id)}>
                   <Trash2 size={14} /> 删除
                 </button>
@@ -1135,13 +1154,17 @@ function PolicyBranch({
   nodes,
   depth,
   selectedId,
-  onSelect
+  onSelect,
+  onAddChild,
+  onEdit
 }: {
   node: PolicyNode;
   nodes: PolicyNode[];
   depth: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onAddChild: (parentId: string) => void;
+  onEdit: (node: PolicyNode) => void;
 }) {
   const children = nodes.filter((candidate) => candidate.parentId === node.id);
   const content = node.rule || node.title;
@@ -1152,11 +1175,16 @@ function PolicyBranch({
         className={[
           "policy-node",
           node.status,
+          depth === 0 ? "root-node" : "",
           selectedId === node.id ? "selected" : ""
         ].filter(Boolean).join(" ")}
         data-policy-id={node.id}
       >
-        <button className="node-content" onClick={() => onSelect(node.id)}>
+        <button
+          className="node-content"
+          onClick={() => onSelect(node.id)}
+          onDoubleClick={() => onEdit(node)}
+        >
           <div className="node-meta">
             <span>{depth === 0 ? "最终目标" : `支撑层级 · ${depth}`}</span>
             <i />
@@ -1172,6 +1200,22 @@ function PolicyBranch({
             )}
           </div>
         </button>
+        <div className="node-quick-actions">
+          <button
+            aria-label={`为 ${content} 添加子国策`}
+            title="添加下一层国策"
+            onClick={() => onAddChild(node.id)}
+          >
+            <Plus size={13} />
+          </button>
+          <button
+            aria-label={`编辑 ${content}`}
+            title="编辑节点"
+            onClick={() => onEdit(node)}
+          >
+            <Settings2 size={12} />
+          </button>
+        </div>
       </article>
 
       {children.length > 0 && (
@@ -1184,6 +1228,8 @@ function PolicyBranch({
               depth={depth + 1}
               selectedId={selectedId}
               onSelect={onSelect}
+              onAddChild={onAddChild}
+              onEdit={onEdit}
             />
           ))}
         </div>
@@ -1666,14 +1712,21 @@ function SeatEditor({
 
 function PolicyEditor({
   node,
+  nodes,
+  parentId,
   onClose,
   onSave
 }: {
   node: PolicyNode | null;
+  nodes: PolicyNode[];
+  parentId: string | null;
   onClose: () => void;
   onSave: (node: PolicyNode) => void;
 }) {
   const [content, setContent] = useState(node?.rule || node?.title || "");
+  const [selectedParentId, setSelectedParentId] = useState(node?.parentId ?? parentId ?? "");
+  const unavailableIds = node ? policyBranchIds(node.id, nodes) : new Set<string>();
+  const availableParents = nodes.filter((candidate) => !unavailableIds.has(candidate.id));
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -1683,8 +1736,8 @@ function PolicyEditor({
       title: normalizedContent,
       trigger: node?.trigger ?? "",
       rule: normalizedContent,
-      parentId: node?.parentId ?? null,
-      kind: node?.kind ?? "requirement",
+      parentId: selectedParentId || null,
+      kind: selectedParentId ? "requirement" : "goal",
       status: node?.status ?? "active",
       createdAt: node?.createdAt ?? new Date().toISOString()
     });
@@ -1703,10 +1756,27 @@ function PolicyEditor({
             required
           />
         </label>
+        <label className="field">
+          <span>所属目标</span>
+          <select
+            value={selectedParentId}
+            onChange={(event) => setSelectedParentId(event.target.value)}
+          >
+            <option value="">独立最终目标</option>
+            {availableParents.map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>
+                {candidate.rule || candidate.title}
+              </option>
+            ))}
+          </select>
+          <small className="field-help">选择后，当前节点会自动排列到该目标的下一层。</small>
+        </label>
         <p className="editor-hint">
           {node
-            ? "修改后会保留节点原有的树关系、状态和创建时间。"
-            : "新节点会先作为独立目标显示，后续可由 Codex 辅助整理树关系。"}
+            ? "内容和所属目标可以一起修改，树会自动重新排版。"
+            : selectedParentId
+              ? "保存后会直接成为所选目标的下一层国策。"
+              : "不选择所属目标时，将创建一个新的最终目标。"}
         </p>
         <footer className="sheet-footer">
           <button type="button" className="secondary-button" onClick={onClose}>取消</button>

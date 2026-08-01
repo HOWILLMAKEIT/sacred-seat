@@ -1,6 +1,6 @@
 [package]
 name = "sacred-seat"
-version = "0.1.6"
+version = "0.1.7"
 description = "A private macOS companion for CTDP and RSIP."
 authors = ["Hao Guo"]
 edition = "2021"
