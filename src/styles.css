@@ -1615,3 +1615,72 @@ button { color: inherit; }
   background: linear-gradient(145deg, rgba(225, 236, 229, .78), rgba(255, 255, 255, .58));
 }
 .metric-card.today-metric strong { color: var(--sage-dark); }
+
+/* Policy tree drag-and-drop keeps the fixed layout and only changes relationships. */
+body.policy-pointer-dragging,
+body.policy-pointer-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+.policy-node .node-content { cursor: grab; }
+.policy-node.dragging {
+  opacity: .32;
+  transform: scale(.97);
+}
+
+.tree-canvas.arranging {
+  outline: 1px dashed rgba(83, 119, 98, .28);
+  outline-offset: -10px;
+}
+
+.policy-node.drop-above,
+.policy-node.drop-below,
+.policy-node.drop-sibling-before,
+.policy-node.drop-sibling-after {
+  z-index: 4;
+  border-color: rgba(68, 108, 86, .56);
+  box-shadow: 0 0 0 4px rgba(82, 125, 101, .12), 0 16px 34px rgba(50, 74, 61, .14);
+}
+
+.policy-node.drop-above { transform: translateY(5px); }
+.policy-node.drop-below { transform: translateY(-5px); }
+.policy-node.drop-sibling-before { transform: translateX(5px); }
+.policy-node.drop-sibling-after { transform: translateX(-5px); }
+
+.drop-cue {
+  position: absolute;
+  z-index: 8;
+  width: max-content;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, .82);
+  border-radius: 999px;
+  background: rgba(49, 86, 70, .95);
+  box-shadow: 0 8px 20px rgba(42, 67, 54, .2);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 650;
+  pointer-events: none;
+}
+
+.drop-cue.above { top: -14px; left: 50%; transform: translateX(-50%); }
+.drop-cue.below { bottom: -14px; left: 50%; transform: translateX(-50%); }
+.drop-cue.sibling-before { top: 50%; left: -9px; transform: translate(-100%, -50%); }
+.drop-cue.sibling-after { top: 50%; right: -9px; transform: translate(100%, -50%); }
+
+.detach-hint {
+  position: sticky;
+  z-index: 7;
+  top: 54px;
+  left: 50%;
+  width: max-content;
+  margin: 8px auto -37px;
+  padding: 7px 11px;
+  border: 1px solid rgba(70, 103, 84, .12);
+  border-radius: 999px;
+  background: rgba(237, 243, 238, .94);
+  box-shadow: 0 7px 18px rgba(55, 72, 62, .08);
+  color: #64766b;
+  font-size: 9px;
+  pointer-events: none;
+}

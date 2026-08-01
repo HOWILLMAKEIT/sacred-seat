@@ -56,6 +56,8 @@ const emptySession: FocusSession = {
   active: false
 };
 
+type PolicyPlacement = "above" | "sibling-before" | "sibling-after" | "below";
+
 type UpdateCheckState = "idle" | "checking" | "current" | "available" | "error";
 
 function makeId(prefix: string): string {
@@ -135,6 +137,58 @@ function policyBranchIds(rootId: string, nodes: PolicyNode[]): Set<string> {
   }
 
   return branchIds;
+}
+
+function policyPlacementAtPoint(
+  card: HTMLElement,
+  clientX: number,
+  clientY: number
+): PolicyPlacement {
+  const bounds = card.getBoundingClientRect();
+  const verticalRatio = (clientY - bounds.top) / bounds.height;
+  if (verticalRatio < 0.26) return "above";
+  if (verticalRatio > 0.74) return "below";
+  return clientX < bounds.left + bounds.width / 2
+    ? "sibling-before"
+    : "sibling-after";
+}
+
+function movePolicyNodes(
+  nodes: PolicyNode[],
+  draggedId: string,
+  targetId: string,
+  placement: PolicyPlacement
+): PolicyNode[] {
+  if (draggedId === targetId) return nodes;
+  const dragged = nodes.find((node) => node.id === draggedId);
+  const target = nodes.find((node) => node.id === targetId);
+  if (!dragged || !target || policyBranchIds(draggedId, nodes).has(targetId)) return nodes;
+
+  let nextParentId: string | null;
+  if (placement === "below") nextParentId = target.id;
+  else nextParentId = target.parentId;
+
+  let moved = nodes.map((node) => {
+    if (node.id === draggedId) {
+      return {
+        ...node,
+        parentId: nextParentId,
+        kind: nextParentId ? "requirement" as const : "goal" as const
+      };
+    }
+    if (placement === "above" && node.id === targetId) {
+      return { ...node, parentId: draggedId, kind: "requirement" as const };
+    }
+    return node;
+  });
+
+  if (placement !== "sibling-before" && placement !== "sibling-after") return moved;
+  const movedNode = moved.find((node) => node.id === draggedId);
+  if (!movedNode) return nodes;
+  moved = moved.filter((node) => node.id !== draggedId);
+  const targetIndex = moved.findIndex((node) => node.id === targetId);
+  moved.splice(targetIndex + (placement === "sibling-after" ? 1 : 0), 0, movedNode);
+  return moved;
 }
 
 function App() {
@@ -419,6 +473,22 @@ function App() {
             }}
             onCodex={() => setCodexOpen(true)}
             onDelete={setDeletePolicyId}
+            onMove={(draggedId, targetId, placement) =>
+              setState((previous) => ({
+                ...previous,
+                policies: movePolicyNodes(previous.policies, draggedId, targetId, placement)
+              }))
+            }
+            onDetach={(nodeId) =>
+              setState((previous) => ({
+                ...previous,
+                policies: previous.policies.map((node) =>
+                  node.id === nodeId
+                    ? { ...node, parentId: null, kind: "goal" as const }
+                    : node
+                )
+              }))
+            }
             onStatusChange={(id, status) =>
               setState((previous) => ({
                 ...previous,
@@ -928,6 +998,8 @@ function PolicyView({
   onAddChild,
   onCodex,
   onDelete,
+  onMove,
+  onDetach,
   onEdit,
   onStatusChange
 }: {
@@ -936,12 +1008,31 @@ function PolicyView({
   onAddChild: (parentId: string) => void;
   onCodex: () => void;
   onDelete: (id: string) => void;
+  onMove: (draggedId: string, targetId: string, placement: PolicyPlacement) => void;
+  onDetach: (nodeId: string) => void;
   onEdit: (node: PolicyNode) => void;
   onStatusChange: (id: string, status: PolicyNode["status"]) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(nodes[0]?.id ?? null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    id: string;
+    placement: PolicyPlacement;
+  } | null>(null);
+  const treeCanvasRef = useRef<HTMLElement | null>(null);
   const treeSurfaceRef = useRef<HTMLDivElement | null>(null);
   const connectorSvgRef = useRef<SVGSVGElement | null>(null);
+  const pointerDragRef = useRef<{
+    id: string;
+    startX: number;
+    startY: number;
+    active: boolean;
+  } | null>(null);
+  const dropTargetRef = useRef<{
+    id: string;
+    placement: PolicyPlacement;
+  } | null>(null);
+  const suppressNodeClickRef = useRef(false);
   const roots = nodes.filter((node) =>
     !node.parentId || !nodes.some((candidate) => candidate.id === node.parentId)
   );
@@ -957,6 +1048,92 @@ function PolicyView({
     if (selectedId && nodes.some((node) => node.id === selectedId)) return;
     setSelectedId(nodes[0]?.id ?? null);
   }, [nodes, selectedId]);
+
+  useEffect(() => {
+    const resetDrag = () => {
+      pointerDragRef.current = null;
+      dropTargetRef.current = null;
+      setDraggingId(null);
+      setDropTarget(null);
+      document.body.classList.remove("policy-pointer-dragging");
+    };
+
+    const autoScrollCanvas = (clientX: number, clientY: number) => {
+      const canvas = treeCanvasRef.current;
+      if (!canvas) return;
+      const bounds = canvas.getBoundingClientRect();
+      const edge = 52;
+      const horizontal = clientX < bounds.left + edge
+        ? -14
+        : clientX > bounds.right - edge ? 14 : 0;
+      const vertical = clientY < bounds.top + edge
+        ? -12
+        : clientY > bounds.bottom - edge ? 12 : 0;
+      if (horizontal || vertical) canvas.scrollBy(horizontal, vertical);
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const current = pointerDragRef.current;
+      if (!current) return;
+      const distance = Math.hypot(event.clientX - current.startX, event.clientY - current.startY);
+      if (!current.active && distance < 5) return;
+      if (!current.active) {
+        current.active = true;
+        setDraggingId(current.id);
+        document.body.classList.add("policy-pointer-dragging");
+      }
+
+      event.preventDefault();
+      autoScrollCanvas(event.clientX, event.clientY);
+      const card = document.elementFromPoint(event.clientX, event.clientY)
+        ?.closest<HTMLElement>(".policy-node[data-policy-id]");
+      const targetId = card?.dataset.policyId;
+      if (
+        !card
+        || !targetId
+        || targetId === current.id
+        || policyBranchIds(current.id, nodes).has(targetId)
+      ) {
+        dropTargetRef.current = null;
+        setDropTarget(null);
+        return;
+      }
+
+      const nextTarget = {
+        id: targetId,
+        placement: policyPlacementAtPoint(card, event.clientX, event.clientY)
+      };
+      if (
+        dropTargetRef.current?.id === nextTarget.id
+        && dropTargetRef.current.placement === nextTarget.placement
+      ) return;
+      dropTargetRef.current = nextTarget;
+      setDropTarget(nextTarget);
+    };
+
+    const handlePointerUp = () => {
+      const current = pointerDragRef.current;
+      if (!current) return;
+      if (current.active) {
+        suppressNodeClickRef.current = true;
+        const target = dropTargetRef.current;
+        if (target) onMove(current.id, target.id, target.placement);
+        else onDetach(current.id);
+        window.setTimeout(() => { suppressNodeClickRef.current = false; }, 0);
+      }
+      resetDrag();
+    };
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", resetDrag);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", resetDrag);
+      document.body.classList.remove("policy-pointer-dragging");
+    };
+  }, [nodes, onDetach, onMove]);
 
   useLayoutEffect(() => {
     const surface = treeSurfaceRef.current;
@@ -1032,7 +1209,7 @@ function PolicyView({
       <section className="policy-toolbar">
         <div className="policy-explainer">
           <span className="section-kicker">国策地图 · {nodes.length} 个节点</span>
-          <p>从最终目标向下拆解可执行国策。单击查看，双击编辑，悬停可添加下一层。</p>
+          <p>从最终目标向下拆解可执行国策。拖动调整关系，单击查看，双击编辑。</p>
         </div>
         <div className="toolbar-actions">
           <button className="secondary-button" onClick={onCodex}>
@@ -1047,13 +1224,17 @@ function PolicyView({
       </section>
 
       <div className="policy-workbench">
-        <section className="tree-canvas panel">
+        <section
+          ref={treeCanvasRef}
+          className={draggingId ? "tree-canvas panel arranging" : "tree-canvas panel"}
+        >
           <div className="tree-canvas-toolbar">
             <span className="tree-mode-label"><GitBranch size={13} /> 固定树形视图</span>
           <div className="tree-legend">
             <span><i className="legend-dot stable" />已稳定</span>
             <span><i className="legend-dot active" />执行中</span>
           </div>
+          {draggingId && <div className="detach-hint">拖到画布空白处，设为独立最终目标</div>}
         </div>
 
         <div
@@ -1083,9 +1264,17 @@ function PolicyView({
                   nodes={nodes}
                   depth={0}
                   selectedId={selectedId}
-                  onSelect={setSelectedId}
+                  onSelect={(id) => {
+                    if (!suppressNodeClickRef.current) setSelectedId(id);
+                  }}
                   onAddChild={onAddChild}
                   onEdit={onEdit}
+                  draggingId={draggingId}
+                  dropTarget={dropTarget}
+                  onPointerStart={(id, clientX, clientY) => {
+                    dropTargetRef.current = null;
+                    pointerDragRef.current = { id, startX: clientX, startY: clientY, active: false };
+                  }}
                 />
               ))}
             </div>
@@ -1172,7 +1361,10 @@ function PolicyBranch({
   selectedId,
   onSelect,
   onAddChild,
-  onEdit
+  onEdit,
+  draggingId,
+  dropTarget,
+  onPointerStart
 }: {
   node: PolicyNode;
   nodes: PolicyNode[];
@@ -1181,9 +1373,13 @@ function PolicyBranch({
   onSelect: (id: string) => void;
   onAddChild: (parentId: string) => void;
   onEdit: (node: PolicyNode) => void;
+  draggingId: string | null;
+  dropTarget: { id: string; placement: PolicyPlacement } | null;
+  onPointerStart: (id: string, clientX: number, clientY: number) => void;
 }) {
   const children = nodes.filter((candidate) => candidate.parentId === node.id);
   const content = node.rule || node.title;
+  const activePlacement = dropTarget?.id === node.id ? dropTarget.placement : null;
 
   return (
     <div className="policy-branch">
@@ -1192,10 +1388,26 @@ function PolicyBranch({
           "policy-node",
           node.status,
           depth === 0 ? "root-node" : "",
+          draggingId === node.id ? "dragging" : "",
+          activePlacement ? `drop-${activePlacement}` : "",
           selectedId === node.id ? "selected" : ""
         ].filter(Boolean).join(" ")}
         data-policy-id={node.id}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          if (!(event.target as HTMLElement).closest(".node-content")) return;
+          onPointerStart(node.id, event.clientX, event.clientY);
+        }}
       >
+        {activePlacement && (
+          <span className={`drop-cue ${activePlacement}`}>
+            {activePlacement === "above"
+              ? "插到上层"
+              : activePlacement === "below"
+                ? "设为下一层"
+                : activePlacement === "sibling-before" ? "并列到左侧" : "并列到右侧"}
+          </span>
+        )}
         <button
           className="node-content"
           onClick={() => onSelect(node.id)}
@@ -1246,6 +1458,9 @@ function PolicyBranch({
               onSelect={onSelect}
               onAddChild={onAddChild}
               onEdit={onEdit}
+              draggingId={draggingId}
+              dropTarget={dropTarget}
+              onPointerStart={onPointerStart}
             />
           ))}
         </div>
