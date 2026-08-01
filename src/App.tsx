@@ -1111,7 +1111,7 @@ function PolicyView({
                   {selectedNode.status === "stable"
                     ? "已稳定"
                     : selectedNode.status === "rolled-back"
-                      ? "已回滚"
+                      ? "尚未做到"
                       : "执行中"}
                 </span>
               </div>
@@ -1128,7 +1128,7 @@ function PolicyView({
                 {([
                   ["active", "执行中"],
                   ["stable", "已稳定"],
-                  ["rolled-back", "已回滚"]
+                  ["rolled-back", "尚未做到"]
                 ] as const).map(([status, label]) => (
                   <button
                     key={status}
@@ -1210,7 +1210,7 @@ function PolicyBranch({
             {node.status === "stable" ? (
               <><Check size={13} /> 已稳定</>
             ) : node.status === "rolled-back" ? (
-              <><RotateCcw size={13} /> 已回滚</>
+              <><RotateCcw size={13} /> 尚未做到</>
             ) : (
               <><Clock3 size={13} /> 执行中</>
             )}
