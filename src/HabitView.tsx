@@ -38,13 +38,6 @@ function formatValue(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
 }
 
-function valueInMinutes(value: number, unit: string) {
-  const normalized = unit.trim().toLowerCase();
-  if (["小时", "时", "h", "hr", "hrs", "hour", "hours"].includes(normalized)) return value * 60;
-  if (["分钟", "分", "min", "mins", "minute", "minutes"].includes(normalized)) return value;
-  return null;
-}
-
 export function HabitView({ tracker, onChange }: HabitViewProps) {
   const currentMonday = useMemo(() => mondayOf(new Date()), []);
   const [weekStart, setWeekStart] = useState(currentMonday);
@@ -67,10 +60,6 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
         total: dailyValues.reduce((sum, value) => sum + value, 0)
       };
     });
-  const totalTimeMinutes = numericSummaries.reduce((sum, summary) => (
-    sum + (valueInMinutes(summary.total, summary.habit.unit) ?? 0)
-  ), 0);
-
   const updateValue = (habit: HabitDefinition, day: Date, value: boolean | number) => {
     onChange({
       ...tracker,
@@ -120,7 +109,6 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
       <section className="habit-summary-strip">
         <div><span>本周完成</span><strong>{completedChecks}<small> / {possibleChecks || 0}</small></strong></div>
         <div><span>完成率</span><strong>{possibleChecks ? Math.round(completedChecks / possibleChecks * 100) : 0}<small>%</small></strong></div>
-        <div><span>本周投入时间</span><strong>{formatValue(totalTimeMinutes / 60)}<small>小时</small></strong></div>
       </section>
 
       {numericSummaries.length > 0 && (
