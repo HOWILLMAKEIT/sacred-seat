@@ -34,6 +34,17 @@ function formatMonthDay(date: Date) {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
+function formatValue(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
+}
+
+function valueInMinutes(value: number, unit: string) {
+  const normalized = unit.trim().toLowerCase();
+  if (["小时", "时", "h", "hr", "hrs", "hour", "hours"].includes(normalized)) return value * 60;
+  if (["分钟", "分", "min", "mins", "minute", "minutes"].includes(normalized)) return value;
+  return null;
+}
+
 export function HabitView({ tracker, onChange }: HabitViewProps) {
   const currentMonday = useMemo(() => mondayOf(new Date()), []);
   const [weekStart, setWeekStart] = useState(currentMonday);
@@ -46,11 +57,19 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
   const completedChecks = checkHabits.reduce((sum, habit) => (
     sum + days.filter((day) => tracker.values[habit.id]?.[dateKey(day)] === true).length
   ), 0);
-  const numericTotal = tracker.habits
+  const numericSummaries = tracker.habits
     .filter((habit) => habit.kind === "number")
-    .reduce((sum, habit) => sum + days.reduce((daySum, day) => (
-      daySum + Number(tracker.values[habit.id]?.[dateKey(day)] || 0)
-    ), 0), 0);
+    .map((habit) => {
+      const dailyValues = days.map((day) => Number(tracker.values[habit.id]?.[dateKey(day)] || 0));
+      return {
+        habit,
+        dailyValues,
+        total: dailyValues.reduce((sum, value) => sum + value, 0)
+      };
+    });
+  const totalTimeMinutes = numericSummaries.reduce((sum, summary) => (
+    sum + (valueInMinutes(summary.total, summary.habit.unit) ?? 0)
+  ), 0);
 
   const updateValue = (habit: HabitDefinition, day: Date, value: boolean | number) => {
     onChange({
@@ -101,8 +120,43 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
       <section className="habit-summary-strip">
         <div><span>本周完成</span><strong>{completedChecks}<small> / {possibleChecks || 0}</small></strong></div>
         <div><span>完成率</span><strong>{possibleChecks ? Math.round(completedChecks / possibleChecks * 100) : 0}<small>%</small></strong></div>
-        <div><span>数值累计</span><strong>{numericTotal}<small>{tracker.habits.find((habit) => habit.kind === "number")?.unit || ""}</small></strong></div>
+        <div><span>本周投入时间</span><strong>{formatValue(totalTimeMinutes / 60)}<small>小时</small></strong></div>
       </section>
+
+      {numericSummaries.length > 0 && (
+        <section className="habit-breakdown-panel">
+          <header>
+            <div>
+              <span className="section-kicker">WEEKLY INPUT</span>
+              <h2>分项投入</h2>
+            </div>
+            <p>每项习惯独立累计，不混合不同单位。</p>
+          </header>
+          <div className="habit-breakdown-grid">
+            {numericSummaries.map(({ habit, dailyValues, total }) => {
+              const peak = Math.max(...dailyValues, 1);
+              return (
+                <article key={habit.id} className="habit-breakdown-card">
+                  <div>
+                    <span>{habit.name}</span>
+                    <strong>{formatValue(total)}<small>{habit.unit}</small></strong>
+                  </div>
+                  <div className="habit-mini-chart" aria-label={`${habit.name}本周分布`}>
+                    {dailyValues.map((value, index) => (
+                      <i
+                        key={`${habit.id}-${index}`}
+                        className={value > 0 ? "active" : ""}
+                        style={{ height: `${value > 0 ? Math.max(14, value / peak * 100) : 6}%` }}
+                        title={`${weekdayLabels[index]}：${formatValue(value)}${habit.unit}`}
+                      />
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <section className="habit-ledger-panel">
         <div className="habit-week-toolbar">
@@ -224,7 +278,7 @@ function HabitEditor({ habit, onClose, onSave, onDelete }: {
       }}>
         <header><div><span className="section-kicker">自定义记录列</span><h2>{habit ? "编辑习惯" : "添加习惯"}</h2></div><button type="button" onClick={onClose}><X size={17} /></button></header>
         <label><span>习惯名称</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：阅读" /></label>
-        <fieldset><legend>记录方式</legend><button type="button" className={kind === "check" ? "active" : ""} onClick={() => setKind("check")}><Check size={15} /> 完成 / 未完成</button><button type="button" className={kind === "number" ? "active" : ""} onClick={() => setKind("number")}><BarChart3 size={15} /> 数值记录</button></fieldset>
+        <fieldset><legend>记录方式</legend><button type="button" className={kind === "check" ? "active" : ""} onClick={() => setKind("check")}><Check size={15} /> 完成 / 未完成</button><button type="button" className={kind === "number" ? "active" : ""} onClick={() => setKind("number")}><BarChart3 size={15} /> 时长 / 数值</button></fieldset>
         {kind === "number" && <label><span>数值单位</span><input value={unit} onChange={(event) => setUnit(event.target.value)} placeholder="小时、页、公里" /></label>}
         <footer>{onDelete && <button type="button" className="habit-delete" onClick={onDelete}><Trash2 size={14} /> 删除</button>}<span /><button type="button" className="secondary-button" onClick={onClose}>取消</button><button className="primary-button" type="submit">保存</button></footer>
       </form>
