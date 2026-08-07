@@ -577,7 +577,39 @@ button { color: inherit; }
 .focus-copy h2 { margin: 8px 0 6px; font: 500 32px/1.15 "Songti SC", "STSong", serif; letter-spacing: .02em; }
 .focus-copy p { margin: 0; color: #858681; font-size: 13px; }
 
-.timer-wrap { display: grid; place-items: center; height: 320px; }
+.current-task {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  width: min(430px, calc(100% - 56px));
+  margin: 22px auto 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(82, 111, 97, .16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .54);
+  box-shadow: 0 8px 24px rgba(59, 78, 68, .05);
+}
+.current-task > span { display: flex; align-items: center; gap: 6px; color: var(--sage-dark); font-size: 11px; font-weight: 680; white-space: nowrap; }
+.current-task > span small { color: #999b95; font-size: 9px; font-weight: 520; }
+.current-task input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid rgba(82, 111, 97, .18);
+  border-radius: 9px;
+  outline: none;
+  background: rgba(248, 248, 245, .9);
+  color: var(--ink);
+  font: 500 13px/1.2 "Songti SC", "STSong", serif;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.current-task input:focus { border-color: rgba(82, 111, 97, .48); box-shadow: 0 0 0 3px rgba(82, 111, 97, .08); }
+.current-task input::placeholder { color: #a8aaa4; }
+.current-task.locked { background: rgba(233, 238, 233, .62); }
+.current-task.locked input { cursor: not-allowed; border-color: transparent; background: rgba(228, 234, 229, .74); color: #676e69; }
+
+.timer-wrap { display: grid; place-items: center; height: 282px; }
 .timer-orbit {
   --progress: 0deg;
   position: relative;

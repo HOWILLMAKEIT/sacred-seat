@@ -9,6 +9,7 @@ export const defaultState: AppState = {
       name: "神圣座位 - 书房",
       trigger: "戴上降噪耳机，坐到书桌前",
       behavior: "只处理当前学习任务，不打开社交与娱乐应用",
+      currentTask: "",
       durationMinutes: 60,
       streak: 7,
       completionLog: {},
@@ -97,6 +98,7 @@ function normalizeSeat(seat: PersistedSeat): SacredSeat {
   );
   return {
     ...seat,
+    currentTask: seat.currentTask ?? "",
     completionLog
   };
 }

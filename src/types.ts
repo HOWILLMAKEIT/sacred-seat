@@ -18,6 +18,7 @@ export interface SacredSeat {
   name: string;
   trigger: string;
   behavior: string;
+  currentTask: string;
   durationMinutes: number;
   streak: number;
   completionLog: Record<string, number>;

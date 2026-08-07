@@ -115,6 +115,7 @@ function createEmptySeat(): SacredSeat {
     name: "神圣座位 - ",
     trigger: "",
     behavior: "",
+    currentTask: "",
     durationMinutes: 60,
     streak: 0,
     completionLog: {},
@@ -445,6 +446,14 @@ function App() {
             onComplete={completeEarly}
             onJudge={() => setJudgmentOpen(true)}
             onEdit={() => setSeatEditorDraft(activeSeat)}
+            onTaskChange={(currentTask) =>
+              setState((previous) =>
+                updateSeat(previous, previous.activeSeatId, (seat) => ({
+                  ...seat,
+                  currentTask
+                }))
+              )
+            }
           />
         ) : view === "habits" ? (
           <HabitView
@@ -871,7 +880,8 @@ function FocusView({
   onStart,
   onComplete,
   onJudge,
-  onEdit
+  onEdit,
+  onTaskChange
 }: {
   seat: SacredSeat;
   session: FocusSession;
@@ -879,6 +889,7 @@ function FocusView({
   onComplete: () => void;
   onJudge: () => void;
   onEdit: () => void;
+  onTaskChange: (currentTask: string) => void;
 }) {
   const todayCount = seat.completionLog?.[localDateKey()] ?? 0;
   const progress = session.active
@@ -904,6 +915,23 @@ function FocusView({
           <h2>{seat.name}</h2>
           <p>{seat.trigger}</p>
         </div>
+
+        <label className={session.active ? "current-task locked" : "current-task"}>
+          <span>
+            <Clock3 size={13} />
+            当前任务
+            <small>{session.active ? "计时中已锁定" : "本轮只做这一件事"}</small>
+          </span>
+          <input
+            type="text"
+            value={seat.currentTask}
+            onChange={(event) => onTaskChange(event.target.value)}
+            readOnly={session.active}
+            maxLength={120}
+            placeholder="例如：完成实验结果分析"
+            aria-label="当前任务"
+          />
+        </label>
 
         <div className="timer-wrap">
           <div
