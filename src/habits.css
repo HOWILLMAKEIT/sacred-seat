@@ -43,7 +43,7 @@
 .habit-title-copy { min-width: 0; flex: 1; }
 .habit-title-copy span { display: block; overflow: hidden; color: var(--ink); font: 600 12px/1.35 "Songti SC", "STSong", serif; text-overflow: ellipsis; white-space: nowrap; }
 .habit-title-copy small { color: #9a9d97; font-size: 8px; font-weight: 500; }
-.habit-drag-handle { display: grid; width: 25px; height: 31px; flex: 0 0 auto; padding: 0; border: 0; border-radius: 8px; background: transparent; color: #b0b5af; cursor: grab; place-items: center; transition: color 140ms ease, background 140ms ease, transform 140ms ease; }
+.habit-drag-handle { display: grid; width: 25px; height: 31px; flex: 0 0 auto; padding: 0; border: 0; border-radius: 8px; background: transparent; color: #b0b5af; cursor: grab; place-items: center; touch-action: none; user-select: none; -webkit-user-select: none; transition: color 140ms ease, background 140ms ease, transform 140ms ease; }
 .habit-drag-handle:hover { color: #557b68; background: rgba(224, 233, 226, .72); }
 .habit-drag-handle:active { cursor: grabbing; transform: scale(.96); }
 .habit-table tbody tr { transition: opacity 140ms ease, background 140ms ease; }

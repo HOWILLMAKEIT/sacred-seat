@@ -107,7 +107,13 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
     onChange({ ...tracker, habits });
   };
 
-  const finishHabitDrag = () => {
+  const habitIdAtPoint = (clientX: number, clientY: number) => {
+    const row = document.elementFromPoint(clientX, clientY)?.closest<HTMLTableRowElement>("tr[data-habit-id]");
+    return row?.dataset.habitId || null;
+  };
+
+  const finishHabitDrag = (targetId?: string | null) => {
+    if (draggedHabitId && targetId) moveHabit(draggedHabitId, targetId);
     setDraggedHabitId(null);
     setDragOverHabitId(null);
   };
@@ -205,34 +211,33 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
               {tracker.habits.map((habit) => (
                 <tr
                   key={habit.id}
+                  data-habit-id={habit.id}
                   className={`${draggedHabitId === habit.id ? "dragging" : ""} ${dragOverHabitId === habit.id && draggedHabitId !== habit.id ? "drag-over" : ""}`.trim()}
-                  onDragOver={(event) => {
-                    if (!draggedHabitId || draggedHabitId === habit.id) return;
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "move";
-                    setDragOverHabitId(habit.id);
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const sourceId = event.dataTransfer.getData("text/plain") || draggedHabitId;
-                    if (sourceId) moveHabit(sourceId, habit.id);
-                    finishHabitDrag();
-                  }}
                 >
                   <th>
                     <div className="habit-title-cell">
                       <button
                         type="button"
                         className="habit-drag-handle"
-                        draggable
                         aria-label={`拖动调整 ${habit.name} 的顺序`}
                         title="拖动调整顺序"
-                        onDragStart={(event) => {
-                          event.dataTransfer.effectAllowed = "move";
-                          event.dataTransfer.setData("text/plain", habit.id);
+                        onPointerDown={(event) => {
+                          event.preventDefault();
+                          event.currentTarget.setPointerCapture(event.pointerId);
                           setDraggedHabitId(habit.id);
+                          setDragOverHabitId(habit.id);
                         }}
-                        onDragEnd={finishHabitDrag}
+                        onPointerMove={(event) => {
+                          if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+                          const targetId = habitIdAtPoint(event.clientX, event.clientY);
+                          if (targetId) setDragOverHabitId(targetId);
+                        }}
+                        onPointerUp={(event) => {
+                          const targetId = habitIdAtPoint(event.clientX, event.clientY) || dragOverHabitId;
+                          event.currentTarget.releasePointerCapture(event.pointerId);
+                          finishHabitDrag(targetId);
+                        }}
+                        onPointerCancel={() => finishHabitDrag()}
                       >
                         <GripVertical size={14} />
                       </button>
