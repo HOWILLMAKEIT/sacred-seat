@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { BarChart3, CalendarDays, Check, ChevronLeft, ChevronRight, Plus, Settings2, Trash2, X } from "lucide-react";
+import { BarChart3, CalendarDays, Check, ChevronLeft, ChevronRight, GripVertical, Plus, Settings2, Trash2, X } from "lucide-react";
 import type { HabitDefinition, HabitTracker } from "./types";
 import "./habits.css";
 
@@ -42,6 +42,8 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
   const currentMonday = useMemo(() => mondayOf(new Date()), []);
   const [weekStart, setWeekStart] = useState(currentMonday);
   const [editor, setEditor] = useState<HabitDefinition | "new" | null>(null);
+  const [draggedHabitId, setDraggedHabitId] = useState<string | null>(null);
+  const [dragOverHabitId, setDragOverHabitId] = useState<string | null>(null);
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
   const isCurrentWeek = dateKey(weekStart) === dateKey(currentMonday);
 
@@ -91,6 +93,23 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
       values: remainingValues
     });
     setEditor(null);
+  };
+
+  const moveHabit = (sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return;
+    const sourceIndex = tracker.habits.findIndex((habit) => habit.id === sourceId);
+    const targetIndex = tracker.habits.findIndex((habit) => habit.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const habits = [...tracker.habits];
+    const [movedHabit] = habits.splice(sourceIndex, 1);
+    habits.splice(targetIndex, 0, movedHabit);
+    onChange({ ...tracker, habits });
+  };
+
+  const finishHabitDrag = () => {
+    setDraggedHabitId(null);
+    setDragOverHabitId(null);
   };
 
   return (
@@ -184,10 +203,44 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
             </thead>
             <tbody>
               {tracker.habits.map((habit) => (
-                <tr key={habit.id}>
+                <tr
+                  key={habit.id}
+                  className={`${draggedHabitId === habit.id ? "dragging" : ""} ${dragOverHabitId === habit.id && draggedHabitId !== habit.id ? "drag-over" : ""}`.trim()}
+                  onDragOver={(event) => {
+                    if (!draggedHabitId || draggedHabitId === habit.id) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    setDragOverHabitId(habit.id);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const sourceId = event.dataTransfer.getData("text/plain") || draggedHabitId;
+                    if (sourceId) moveHabit(sourceId, habit.id);
+                    finishHabitDrag();
+                  }}
+                >
                   <th>
-                    <span>{habit.name}</span>
-                    <small>{habit.kind === "check" ? "完成" : habit.unit || "数值"}</small>
+                    <div className="habit-title-cell">
+                      <button
+                        type="button"
+                        className="habit-drag-handle"
+                        draggable
+                        aria-label={`拖动调整 ${habit.name} 的顺序`}
+                        title="拖动调整顺序"
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", habit.id);
+                          setDraggedHabitId(habit.id);
+                        }}
+                        onDragEnd={finishHabitDrag}
+                      >
+                        <GripVertical size={14} />
+                      </button>
+                      <div className="habit-title-copy">
+                        <span>{habit.name}</span>
+                        <small>{habit.kind === "check" ? "完成" : habit.unit || "数值"}</small>
+                      </div>
+                    </div>
                   </th>
                   {days.map((day) => {
                     const key = dateKey(day);

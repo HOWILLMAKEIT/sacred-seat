@@ -38,9 +38,17 @@
 .habit-table thead th:last-child { width: 44px; }
 .habit-table thead th span, .habit-table thead th strong { display: block; }
 .habit-table thead th strong { margin-top: 3px; color: #5d665f; font: 650 13px "SFMono-Regular", Consolas, monospace; }
-.habit-table tbody th { padding: 8px 14px 8px 18px; background: rgba(250, 249, 245, .65); text-align: left; }
-.habit-table tbody th span { display: block; overflow: hidden; color: var(--ink); font: 600 12px/1.35 "Songti SC", "STSong", serif; text-overflow: ellipsis; white-space: nowrap; }
-.habit-table tbody th small { color: #9a9d97; font-size: 8px; font-weight: 500; }
+.habit-table tbody th { padding: 8px 10px; background: rgba(250, 249, 245, .65); text-align: left; }
+.habit-title-cell { display: flex; min-width: 0; align-items: center; gap: 7px; }
+.habit-title-copy { min-width: 0; flex: 1; }
+.habit-title-copy span { display: block; overflow: hidden; color: var(--ink); font: 600 12px/1.35 "Songti SC", "STSong", serif; text-overflow: ellipsis; white-space: nowrap; }
+.habit-title-copy small { color: #9a9d97; font-size: 8px; font-weight: 500; }
+.habit-drag-handle { display: grid; width: 25px; height: 31px; flex: 0 0 auto; padding: 0; border: 0; border-radius: 8px; background: transparent; color: #b0b5af; cursor: grab; place-items: center; transition: color 140ms ease, background 140ms ease, transform 140ms ease; }
+.habit-drag-handle:hover { color: #557b68; background: rgba(224, 233, 226, .72); }
+.habit-drag-handle:active { cursor: grabbing; transform: scale(.96); }
+.habit-table tbody tr { transition: opacity 140ms ease, background 140ms ease; }
+.habit-table tbody tr.dragging { opacity: .42; }
+.habit-table tbody tr.drag-over > th, .habit-table tbody tr.drag-over > td { background: rgba(218, 232, 222, .58); box-shadow: inset 0 1px 0 rgba(78, 118, 96, .34), inset 0 -1px 0 rgba(78, 118, 96, .34); }
 .habit-table .today { background: rgba(225, 236, 229, .38); }
 .habit-check { display: grid; width: 25px; height: 25px; margin: auto; padding: 0; border: 1px solid rgba(83, 96, 85, .18); border-radius: 8px; background: rgba(255, 255, 252, .8); color: white; cursor: pointer; place-items: center; transition: 140ms ease; }
 .habit-check:hover { border-color: rgba(73, 111, 91, .42); transform: translateY(-1px); }
