@@ -45,6 +45,7 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
   const [draggedHabitId, setDraggedHabitId] = useState<string | null>(null);
   const [dragOverHabitId, setDragOverHabitId] = useState<string | null>(null);
   const [weekExpanded, setWeekExpanded] = useState(false);
+  const [habitColumnWidth, setHabitColumnWidth] = useState(176);
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
   const isCurrentWeek = dateKey(weekStart) === dateKey(currentMonday);
 
@@ -195,7 +196,10 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
         </div>
 
         <div className="habit-table-wrap">
-        <table className={weekExpanded ? "habit-table" : "habit-table collapsed"}>
+        <table
+          className={weekExpanded ? "habit-table" : "habit-table collapsed"}
+          style={{ "--habit-column-width": `${habitColumnWidth}px` } as React.CSSProperties}
+        >
           <caption className="habit-week-toggle-caption">
             <button
               type="button"
@@ -209,7 +213,28 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
           </caption>
             <thead>
               <tr>
-                <th>习惯</th>
+                <th className="habit-name-heading">
+                  <span>习惯</span>
+                  <button
+                    type="button"
+                    className="habit-column-resizer"
+                    aria-label="拖动调整习惯名称列宽"
+                    title="左右拖动调整列宽"
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      event.currentTarget.dataset.startX = String(event.clientX);
+                      event.currentTarget.dataset.startWidth = String(habitColumnWidth);
+                    }}
+                    onPointerMove={(event) => {
+                      if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+                      const startX = Number(event.currentTarget.dataset.startX);
+                      const startWidth = Number(event.currentTarget.dataset.startWidth);
+                      setHabitColumnWidth(Math.max(128, Math.min(420, startWidth + event.clientX - startX)));
+                    }}
+                    onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+                  />
+                </th>
                 {days.map((day, index) => (
                   <th key={dateKey(day)} className={dateKey(day) === dateKey(new Date()) ? "today" : ""}>
                     <span>{weekdayLabels[index]}</span>

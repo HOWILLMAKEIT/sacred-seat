@@ -52,6 +52,41 @@
 .habit-table .today { background: rgba(225, 236, 229, .38); }
 .habit-table.collapsed th:not(:first-child):not(.today),
 .habit-table.collapsed td:not(.today) { display: none; }
+.habit-table th:first-child,
+.habit-table tbody th {
+  width: var(--habit-column-width, 176px);
+  min-width: var(--habit-column-width, 176px);
+  max-width: var(--habit-column-width, 176px);
+}
+.habit-name-heading { position: relative; }
+.habit-column-resizer {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  right: -6px;
+  width: 12px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.habit-column-resizer::after {
+  content: "";
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 5px;
+  width: 2px;
+  border-radius: 2px;
+  background: rgba(82, 111, 97, .18);
+  transition: background 140ms ease, transform 140ms ease;
+}
+.habit-column-resizer:hover::after,
+.habit-column-resizer:active::after { background: rgba(82, 111, 97, .58); transform: scaleX(1.35); }
 .habit-week-toggle-caption { caption-side: top; padding: 0 0 12px; text-align: right; }
 .habit-week-toggle {
   display: inline-flex;
