@@ -50,6 +50,25 @@
 .habit-table tbody tr.dragging { opacity: .42; }
 .habit-table tbody tr.drag-over > th, .habit-table tbody tr.drag-over > td { background: rgba(218, 232, 222, .58); box-shadow: inset 0 1px 0 rgba(78, 118, 96, .34), inset 0 -1px 0 rgba(78, 118, 96, .34); }
 .habit-table .today { background: rgba(225, 236, 229, .38); }
+.habit-table.collapsed th:not(:first-child):not(.today),
+.habit-table.collapsed td:not(.today) { display: none; }
+.habit-week-toggle-caption { caption-side: top; padding: 0 0 12px; text-align: right; }
+.habit-week-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 31px;
+  padding: 0 11px;
+  border: 1px solid rgba(82, 111, 97, .16);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .72);
+  color: var(--sage-dark);
+  cursor: pointer;
+  box-shadow: 0 5px 16px rgba(59, 78, 68, .05);
+}
+.habit-week-toggle:hover { border-color: rgba(82, 111, 97, .32); background: rgba(237, 243, 238, .92); }
+.habit-week-toggle span { font-size: 11px; font-weight: 680; }
+.habit-week-toggle small { color: #969a94; font-size: 9px; font-weight: 520; }
 .habit-check { display: grid; width: 25px; height: 25px; margin: auto; padding: 0; border: 1px solid rgba(83, 96, 85, .18); border-radius: 8px; background: rgba(255, 255, 252, .8); color: white; cursor: pointer; place-items: center; transition: 140ms ease; }
 .habit-check:hover { border-color: rgba(73, 111, 91, .42); transform: translateY(-1px); }
 .habit-check.checked { border-color: #557b68; background: linear-gradient(145deg, #6f9581, #456d59); box-shadow: 0 5px 12px rgba(69, 109, 89, .18); }

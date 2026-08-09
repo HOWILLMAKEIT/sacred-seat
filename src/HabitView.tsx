@@ -44,6 +44,7 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
   const [editor, setEditor] = useState<HabitDefinition | "new" | null>(null);
   const [draggedHabitId, setDraggedHabitId] = useState<string | null>(null);
   const [dragOverHabitId, setDragOverHabitId] = useState<string | null>(null);
+  const [weekExpanded, setWeekExpanded] = useState(false);
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
   const isCurrentWeek = dateKey(weekStart) === dateKey(currentMonday);
 
@@ -194,7 +195,18 @@ export function HabitView({ tracker, onChange }: HabitViewProps) {
         </div>
 
         <div className="habit-table-wrap">
-          <table className="habit-table">
+        <table className={weekExpanded ? "habit-table" : "habit-table collapsed"}>
+          <caption className="habit-week-toggle-caption">
+            <button
+              type="button"
+              className="habit-week-toggle"
+              onClick={() => setWeekExpanded((expanded) => !expanded)}
+              aria-expanded={weekExpanded}
+            >
+              <span>{weekExpanded ? "收起到今天" : "展开本周"}</span>
+              <small>{weekExpanded ? "仅显示今日记录" : "查看最近七天"}</small>
+            </button>
+          </caption>
             <thead>
               <tr>
                 <th>习惯</th>
